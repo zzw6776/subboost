@@ -20,6 +20,7 @@ import {
   type AutoUpdateIntervalPolicy,
 } from "@subboost/core/subscription/auto-update-interval";
 import type { Subscription } from "./dashboard-types";
+import { formatDashboardDate } from "./dashboard-format";
 import {
   buildNodeQuotaWarning,
   buildQuotaDisabledRecoveryText,
@@ -38,6 +39,12 @@ type Props = {
   setAutoUpdateEnabled: (value: boolean) => void;
   autoUpdateHours: number;
   setAutoUpdateHours: (value: number) => void;
+  resourceCacheEnabled: boolean;
+  setResourceCacheEnabled: (value: boolean) => void;
+  resourceCacheHours: number;
+  setResourceCacheHours: (value: number) => void;
+  refreshingResourceCache: boolean;
+  onRefreshResourceCache: () => void;
   savingSettings: boolean;
   onSave: () => void;
   userIsAdmin: boolean;
@@ -56,6 +63,12 @@ export function SubscriptionSettingsDialog({
   setAutoUpdateEnabled,
   autoUpdateHours,
   setAutoUpdateHours,
+  resourceCacheEnabled,
+  setResourceCacheEnabled,
+  resourceCacheHours,
+  setResourceCacheHours,
+  refreshingResourceCache,
+  onRefreshResourceCache,
   savingSettings,
   onSave,
   userIsAdmin,
@@ -66,15 +79,15 @@ export function SubscriptionSettingsDialog({
   const quotaDisabled = subscription ? isNodeQuotaAutoUpdateDisabled(subscription.autoUpdateState) : false;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="grid max-h-[90vh] w-[calc(100%_-_2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>订阅设置</DialogTitle>
           <DialogDescription>
             改名与自动更新配置（最小 {getAutoUpdateIntervalPolicyMinLabel(policy)}，按创建时间计时）
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-h-0 space-y-4 overflow-y-auto overflow-x-hidden px-6 py-2 [scrollbar-gutter:stable]">
           <FormField label="订阅名称">
             <Input
               value={settingsName}
@@ -130,9 +143,81 @@ export function SubscriptionSettingsDialog({
               />
             </FormField>
           )}
+
+          <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <SwitchField
+              label="使用服务器资源缓存"
+              description="规则集、Geo 数据和远程 Provider 由服务器下载，客户端只访问 SubBoost。"
+              checked={resourceCacheEnabled}
+              onCheckedChange={setResourceCacheEnabled}
+            />
+
+            {resourceCacheEnabled && (
+              <FormField label="资源缓存更新间隔（小时）">
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={resourceCacheHours}
+                  onChange={(e) => setResourceCacheHours(Number(e.target.value))}
+                />
+              </FormField>
+            )}
+
+            {resourceCacheEnabled && subscription && (
+              <div className="space-y-3 text-xs">
+                <div className="grid gap-2 rounded-md bg-black/20 p-3 sm:grid-cols-2">
+                  <p>状态：<span className="text-white/80">{subscription.resourceCacheEnabled ? resourceCacheStatusLabel(subscription.resourceCache.status) : "保存后首次更新"}</span></p>
+                  <p>缓存条目：<span className="text-white/80">{subscription.resourceCacheEnabled ? subscription.resourceCache.entries.length : 0}</span></p>
+                  <p>最后成功：<span className="text-white/80">{subscription.resourceCacheEnabled ? formatDashboardDate(subscription.resourceCache.lastUpdatedAt) : "—"}</span></p>
+                  <p>下次更新：<span className="text-white/80">{subscription.resourceCacheEnabled ? formatDashboardDate(subscription.resourceCache.nextUpdateAt) : "—"}</span></p>
+                </div>
+
+                {subscription.resourceCache.lastError && (
+                  <p className="rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-red-200">
+                    {subscription.resourceCache.lastError}
+                  </p>
+                )}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRefreshResourceCache}
+                  disabled={!subscription.resourceCacheEnabled || refreshingResourceCache || savingSettings}
+                >
+                  {refreshingResourceCache
+                    ? "更新中..."
+                    : subscription.resourceCacheEnabled
+                      ? "立即更新资源缓存"
+                      : "保存后可立即更新"}
+                </Button>
+
+                {subscription.resourceCacheEnabled && subscription.resourceCache.entries.length > 0 && (
+                  <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                    {subscription.resourceCache.entries.map((entry) => (
+                      <div key={entry.key} className="rounded-md border border-white/10 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate font-medium text-white/80">{entry.name}</span>
+                          <span className={entry.status === "ready" ? "text-emerald-300" : "text-amber-300"}>
+                            {resourceCacheStatusLabel(entry.status)}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-white/40" title={entry.sourceUrl}>{entry.sourceUrl}</p>
+                        <p className="mt-1 text-white/40">
+                          {entry.kind} · {formatBytes(entry.sizeBytes)} · {formatDashboardDate(entry.lastUpdatedAt)}
+                        </p>
+                        {entry.lastError && <p className="mt-1 text-red-300">{entry.lastError}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-white/10 px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={savingSettings}>
             取消
           </Button>
@@ -143,4 +228,25 @@ export function SubscriptionSettingsDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function resourceCacheStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    disabled: "未启用",
+    pending: "等待首次更新",
+    updating: "更新中",
+    ready: "正常",
+    partial: "部分失败",
+    failed: "更新失败",
+    stale: "使用旧缓存",
+    empty: "没有可缓存资源",
+  };
+  return labels[status] ?? status;
+}
+
+function formatBytes(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "未知大小";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MiB`;
 }

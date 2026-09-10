@@ -311,6 +311,8 @@ describe("useEditingSubscriptionLoader", () => {
       token: "token-1",
       name: "Saved",
       autoUpdateInterval: 7200,
+      resourceCacheEnabled: false,
+      resourceCacheInterval: null,
       smartNodeMatchingEnabled: false,
     });
     expect(options.setSubscriptionName).toHaveBeenCalledWith("Saved");

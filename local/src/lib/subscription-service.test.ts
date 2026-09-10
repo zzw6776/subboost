@@ -15,7 +15,8 @@ import {
 } from "./subscription-service";
 
 const mocks = vi.hoisted(() => ({
-  generateClashYaml: vi.fn(),
+  configToYaml: vi.fn(),
+  buildGeneratedSubscriptionConfig: vi.fn(),
   buildGenerateOptionsFromConfig: vi.fn(),
   getEffectiveTestOptions: vi.fn(),
   buildProxyProvidersFromConfig: vi.fn(),
@@ -26,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   importSourceUrlDirect: vi.fn(),
   fetchSourceUserInfoHeadersDirect: vi.fn(),
   getAppUrl: vi.fn(),
+  removeSubscriptionResourceCache: vi.fn(),
+  rewriteExternalResources: vi.fn(),
   prisma: {
     subscription: {
       findMany: vi.fn(),
@@ -42,7 +45,23 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@subboost/core/generator", () => ({
-  generateClashYaml: mocks.generateClashYaml,
+  configToYaml: mocks.configToYaml,
+}));
+
+vi.mock("./generated-subscription-config", () => ({
+  buildGeneratedSubscriptionConfig: mocks.buildGeneratedSubscriptionConfig,
+}));
+
+vi.mock("./public-app-url", () => ({
+  getEffectivePublicAppUrl: vi.fn(async () => mocks.getAppUrl()),
+}));
+
+vi.mock("./resource-cache", () => ({
+  DEFAULT_RESOURCE_CACHE_INTERVAL_SECONDS: 86400,
+  normalizeResourceCacheInterval: (value: unknown) => value == null || value === "" ? null : Number(value),
+  readResourceCacheEntries: () => [],
+  removeSubscriptionResourceCache: mocks.removeSubscriptionResourceCache,
+  rewriteExternalResources: mocks.rewriteExternalResources,
 }));
 
 vi.mock("@subboost/core/subscription/config-utils", () => ({
@@ -127,6 +146,13 @@ function row(overrides: Partial<SubscriptionRow> = {}): SubscriptionRow {
     }),
     encryptedSubscriptionInfo: JSON.stringify({ upload: 2048, total: 4096 }),
     autoUpdateInterval: 86400,
+    resourceCacheEnabled: false,
+    resourceCacheInterval: null,
+    resourceCacheStatus: "disabled",
+    resourceCacheLastAttemptedAt: null,
+    resourceCacheLastUpdatedAt: null,
+    resourceCacheLastError: null,
+    encryptedResourceCacheEntries: null,
     cacheExpiresAt: new Date("2026-06-01T01:00:00.000Z"),
     lastAccessedAt: new Date("2026-06-01T02:00:00.000Z"),
     lastUpdatedAt: new Date("2026-06-01T03:00:00.000Z"),
@@ -164,7 +190,10 @@ describe("local subscription service", () => {
     mocks.getEffectiveTestOptions.mockReturnValue({ testUrl: "https://test.example.com", testInterval: 600 });
     mocks.buildProxyProvidersFromConfig.mockReturnValue(null);
     mocks.buildGenerateOptionsFromConfig.mockReturnValue({ nodes: [node()] });
-    mocks.generateClashYaml.mockReturnValue("mixed-port: 7890\n");
+    mocks.buildGeneratedSubscriptionConfig.mockReturnValue({ "mixed-port": 7890 });
+    mocks.removeSubscriptionResourceCache.mockResolvedValue(undefined);
+    mocks.rewriteExternalResources.mockImplementation((config: any) => ({ config, descriptors: [] }));
+    mocks.configToYaml.mockReturnValue("mixed-port: 7890\n");
     mocks.prisma.subscription.findMany.mockResolvedValue([row()]);
     mocks.prisma.subscription.create.mockResolvedValue(row({ name: "Created" }));
     mocks.prisma.subscription.findFirst.mockResolvedValue(row());
@@ -493,6 +522,48 @@ describe("local subscription service", () => {
     expect(mocks.prisma.subscription.update).not.toHaveBeenCalled();
   });
 
+  it("enables and disables per-subscription resource caching", async () => {
+    await updateSubscription("owner-1", "sub-1", {
+      resourceCacheEnabled: true,
+      resourceCacheInterval: 43200,
+    });
+    expect(mocks.prisma.subscription.update).toHaveBeenLastCalledWith({
+      where: { id: "sub-1" },
+      data: expect.objectContaining({
+        resourceCacheEnabled: true,
+        resourceCacheInterval: 43200,
+        resourceCacheStatus: "pending",
+      }),
+      include: { autoUpdateState: true },
+    });
+
+    mocks.prisma.subscription.findFirst.mockResolvedValueOnce(row({
+      resourceCacheEnabled: true,
+      resourceCacheInterval: 43200,
+      resourceCacheStatus: "ready",
+      resourceCacheLastAttemptedAt: new Date("2026-06-01T01:00:00.000Z"),
+      resourceCacheLastUpdatedAt: new Date("2026-06-01T01:00:00.000Z"),
+      encryptedResourceCacheEntries: JSON.stringify([{ key: "cached" }]),
+    }));
+    await updateSubscription("owner-1", "sub-1", {
+      resourceCacheEnabled: false,
+      resourceCacheInterval: null,
+    });
+    expect(mocks.prisma.subscription.update).toHaveBeenLastCalledWith({
+      where: { id: "sub-1" },
+      data: expect.objectContaining({
+        resourceCacheEnabled: false,
+        resourceCacheInterval: null,
+        resourceCacheStatus: "disabled",
+        resourceCacheLastAttemptedAt: null,
+        resourceCacheLastUpdatedAt: null,
+        encryptedResourceCacheEntries: null,
+      }),
+      include: { autoUpdateState: true },
+    });
+    expect(mocks.removeSubscriptionResourceCache).toHaveBeenCalledWith("sub-1");
+  });
+
   it("replaces submitted config instead of retaining omitted stale fields", async () => {
     mocks.prisma.subscription.findFirst.mockResolvedValueOnce(
       row({
@@ -618,18 +689,23 @@ describe("local subscription service", () => {
       yaml: "mixed-port: 7890\n",
       name: "Saved",
       subscriptionInfo: { upload: 2048, total: 4096 },
-      cacheExpirySeconds: 3600,
-      autoUpdateIntervalSeconds: 86400,
-      isAdmin: true,
     });
-    expect(mocks.buildGenerateOptionsFromConfig).toHaveBeenCalledWith(
+    expect(mocks.buildGeneratedSubscriptionConfig).toHaveBeenCalledWith(
       expect.objectContaining({ sources: expect.any(Array) }),
-      expect.objectContaining({ nodes: [expect.objectContaining({ name: "Node" })], proxyProviders: null })
+      [expect.objectContaining({ name: "Node" })]
     );
     expect(mocks.prisma.subscription.update).toHaveBeenCalledWith({
       where: { id: "sub-1" },
       data: { lastAccessedAt: expect.any(Date) },
     });
+
+    mocks.prisma.subscription.findUnique.mockResolvedValueOnce(row({ resourceCacheEnabled: true }));
+    await expect(generateSubscriptionYaml("token-1")).resolves.toMatchObject({ yaml: "mixed-port: 7890\n" });
+    expect(mocks.rewriteExternalResources).toHaveBeenCalledWith(
+      { "mixed-port": 7890 },
+      "token-1",
+      "http://127.0.0.1:3001"
+    );
 
     mocks.prisma.subscription.findUnique.mockResolvedValueOnce(null);
     await expect(generateSubscriptionYaml("missing")).resolves.toBeNull();
@@ -637,13 +713,13 @@ describe("local subscription service", () => {
     mocks.prisma.subscription.findUnique.mockResolvedValueOnce(
       row({ encryptedNodes: JSON.stringify([]), encryptedConfig: JSON.stringify({}) })
     );
-    mocks.buildProxyProvidersFromConfig.mockReturnValueOnce(null);
+    mocks.buildGeneratedSubscriptionConfig.mockReturnValueOnce(null);
     await expect(generateSubscriptionYaml("empty")).resolves.toBeNull();
 
     mocks.prisma.subscription.findUnique.mockResolvedValueOnce(
       row({ encryptedNodes: JSON.stringify([]), encryptedConfig: JSON.stringify({ proxyProviders: { provider: {} } }) })
     );
-    mocks.buildProxyProvidersFromConfig.mockReturnValueOnce({ provider: { url: "https://example.com/provider.yaml" } });
+    mocks.buildGeneratedSubscriptionConfig.mockReturnValueOnce({ "proxy-providers": { provider: {} } });
     await expect(generateSubscriptionYaml("provider-only")).resolves.toMatchObject({ yaml: "mixed-port: 7890\n" });
   });
 });

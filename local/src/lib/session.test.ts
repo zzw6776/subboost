@@ -38,6 +38,10 @@ vi.mock("jose", () => ({
   jwtVerify: mocks.jwtVerify,
 }));
 
+vi.mock("./public-app-url", () => ({
+  getEffectivePublicAppUrl: vi.fn(async () => process.env.APP_URL || "http://127.0.0.1:3001"),
+}));
+
 import {
   clearSessionCookieOptions,
   readSession,
@@ -76,15 +80,15 @@ describe("local session helpers", () => {
     await expect(readSession()).resolves.toBeNull();
   });
 
-  it("builds secure session cookie options and clear options", () => {
-    expect(sessionCookieOptions()).toEqual({
+  it("builds secure session cookie options and clear options", async () => {
+    await expect(sessionCookieOptions()).resolves.toEqual({
       httpOnly: true,
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
       sameSite: "lax",
       secure: true,
     });
-    expect(clearSessionCookieOptions()).toEqual({
+    await expect(clearSessionCookieOptions()).resolves.toEqual({
       httpOnly: true,
       maxAge: 0,
       path: "/",
@@ -93,7 +97,7 @@ describe("local session helpers", () => {
     });
 
     process.env.APP_URL = "http://local.example";
-    expect(sessionCookieOptions()).toEqual(expect.objectContaining({ secure: false }));
-    expect(clearSessionCookieOptions()).toEqual(expect.objectContaining({ secure: false }));
+    await expect(sessionCookieOptions()).resolves.toEqual(expect.objectContaining({ secure: false }));
+    await expect(clearSessionCookieOptions()).resolves.toEqual(expect.objectContaining({ secure: false }));
   });
 });

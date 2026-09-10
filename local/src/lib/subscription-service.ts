@@ -1,7 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { generateClashYaml } from "@subboost/core/generator";
-import { buildGenerateOptionsFromConfig, getEffectiveTestOptions } from "@subboost/core/subscription/config-utils";
-import { buildProxyProvidersFromConfig } from "@subboost/core/subscription/proxy-providers";
+import { configToYaml } from "@subboost/core/generator";
+import { buildGenerateOptionsFromConfig } from "@subboost/core/subscription/config-utils";
 import type { SubscriptionResponseInfo } from "@subboost/core/subscription/subscription-response-info";
 import type { ParsedNode } from "@subboost/core/types/node";
 import {
@@ -22,7 +21,16 @@ import {
 } from "@subboost/server-core/subscription";
 import { decryptJson, decryptJsonObject, encryptJson } from "./crypto";
 import { getAppUrl } from "./env";
+import { buildGeneratedSubscriptionConfig } from "./generated-subscription-config";
 import { prisma } from "./prisma";
+import { getEffectivePublicAppUrl } from "./public-app-url";
+import {
+  DEFAULT_RESOURCE_CACHE_INTERVAL_SECONDS,
+  normalizeResourceCacheInterval,
+  readResourceCacheEntries,
+  removeSubscriptionResourceCache,
+  rewriteExternalResources,
+} from "./resource-cache";
 import { fetchSourceUserInfoHeadersDirect, importSourceUrlDirect } from "./source-import";
 import { normalizeLocalAutoUpdateIntervalSeconds } from "./auto-update-policy";
 
@@ -40,6 +48,13 @@ export type SubscriptionRow = {
   encryptedConfig: string;
   encryptedSubscriptionInfo: string | null;
   autoUpdateInterval: number | null;
+  resourceCacheEnabled: boolean;
+  resourceCacheInterval: number | null;
+  resourceCacheStatus: string;
+  resourceCacheLastAttemptedAt: Date | null;
+  resourceCacheLastUpdatedAt: Date | null;
+  resourceCacheLastError: string | null;
+  encryptedResourceCacheEntries: string | null;
   cacheExpiresAt: Date | null;
   lastAccessedAt: Date | null;
   lastUpdatedAt: Date | null;
@@ -70,6 +85,16 @@ export type SubscriptionSummary = {
   yamlUrl: string;
   isPrimary: boolean;
   autoUpdateInterval: number | null;
+  resourceCacheEnabled: boolean;
+  resourceCacheInterval: number | null;
+  resourceCache: {
+    status: string;
+    lastAttemptedAt: string | null;
+    lastUpdatedAt: string | null;
+    nextUpdateAt: string | null;
+    lastError: string | null;
+    entries: ReturnType<typeof readResourceCacheEntries>;
+  };
   smartNodeMatchingEnabled: boolean;
   cacheExpiresAt: string | null;
   lastAccessedAt: string | null;
@@ -101,9 +126,6 @@ export type GeneratedSubscriptionYaml = {
   yaml: string;
   name: string;
   subscriptionInfo: SubscriptionResponseInfo;
-  cacheExpirySeconds: number;
-  autoUpdateIntervalSeconds: number | null;
-  isAdmin: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -118,8 +140,8 @@ function validateLocalSubscriptionNodes(value: unknown): ParsedNode[] {
   return validateSubscriptionNodeList(value);
 }
 
-function buildLocalSubscriptionUrl(token: string): string {
-  return `${getAppUrl()}/api/subscriptions/${token}/config.yaml`;
+function buildLocalSubscriptionUrl(token: string, appUrl = getAppUrl()): string {
+  return `${appUrl.replace(/\/+$/, "")}/api/subscriptions/${token}/config.yaml`;
 }
 
 function buildLocalSubscriptionConfig(
@@ -169,39 +191,68 @@ export function readSubscriptionSecrets(row: SubscriptionRow) {
   };
 }
 
-export function formatSubscription(row: SubscriptionRow): SubscriptionSummary {
-  const secrets = readSubscriptionSecrets(row);
-  const subscriptionUrl = buildLocalSubscriptionUrl(row.token);
-  return serializeSubscriptionSummaryData(row, secrets, {
-    subscriptionUrl,
-    yamlUrl: subscriptionUrl,
-    dateMode: "iso",
-    includeCounts: true,
-    includeFailureSourceState: false,
-    includeLastAttemptedAt: true,
-  }) as SubscriptionSummary;
+function formatResourceCache(row: SubscriptionRow) {
+  const lastAttemptedAt = row.resourceCacheLastAttemptedAt?.toISOString() ?? null;
+  const lastUpdatedAt = row.resourceCacheLastUpdatedAt?.toISOString() ?? null;
+  const nextUpdateAt = row.resourceCacheEnabled && row.resourceCacheInterval && row.resourceCacheLastAttemptedAt
+    ? new Date(row.resourceCacheLastAttemptedAt.getTime() + row.resourceCacheInterval * 1000).toISOString()
+    : null;
+  return {
+    status: row.resourceCacheEnabled ? row.resourceCacheStatus : "disabled",
+    lastAttemptedAt,
+    lastUpdatedAt,
+    nextUpdateAt,
+    lastError: row.resourceCacheLastError,
+    entries: readResourceCacheEntries(row.encryptedResourceCacheEntries),
+  };
 }
 
-export function formatSubscriptionDetail(row: SubscriptionRow): SubscriptionDetail {
+export function formatSubscription(row: SubscriptionRow, appUrl = getAppUrl()): SubscriptionSummary {
   const secrets = readSubscriptionSecrets(row);
-  const subscriptionUrl = buildLocalSubscriptionUrl(row.token);
-  return serializeSubscriptionDetailData(row, secrets, {
-    subscriptionUrl,
-    yamlUrl: subscriptionUrl,
-    dateMode: "iso",
-    includeCounts: true,
-    includeFailureSourceState: false,
-    includeLastAttemptedAt: true,
-  }) as SubscriptionDetail;
+  const subscriptionUrl = buildLocalSubscriptionUrl(row.token, appUrl);
+  return {
+    ...serializeSubscriptionSummaryData(row, secrets, {
+      subscriptionUrl,
+      yamlUrl: subscriptionUrl,
+      dateMode: "iso",
+      includeCounts: true,
+      includeFailureSourceState: false,
+      includeLastAttemptedAt: true,
+    }),
+    resourceCacheEnabled: row.resourceCacheEnabled,
+    resourceCacheInterval: row.resourceCacheInterval,
+    resourceCache: formatResourceCache(row),
+  } as SubscriptionSummary;
+}
+
+export function formatSubscriptionDetail(row: SubscriptionRow, appUrl = getAppUrl()): SubscriptionDetail {
+  const secrets = readSubscriptionSecrets(row);
+  const subscriptionUrl = buildLocalSubscriptionUrl(row.token, appUrl);
+  return {
+    ...serializeSubscriptionDetailData(row, secrets, {
+      subscriptionUrl,
+      yamlUrl: subscriptionUrl,
+      dateMode: "iso",
+      includeCounts: true,
+      includeFailureSourceState: false,
+      includeLastAttemptedAt: true,
+    }),
+    resourceCacheEnabled: row.resourceCacheEnabled,
+    resourceCacheInterval: row.resourceCacheInterval,
+    resourceCache: formatResourceCache(row),
+  } as SubscriptionDetail;
 }
 
 export async function listSubscriptions(ownerId: string): Promise<SubscriptionSummary[]> {
-  const rows = await prisma.subscription.findMany({
-    where: { ownerId },
-    include: { autoUpdateState: true },
-    orderBy: { updatedAt: "desc" },
-  });
-  return rows.map(formatSubscription);
+  const [rows, appUrl] = await Promise.all([
+    prisma.subscription.findMany({
+      where: { ownerId },
+      include: { autoUpdateState: true },
+      orderBy: { updatedAt: "desc" },
+    }),
+    getEffectivePublicAppUrl(ownerId),
+  ]);
+  return rows.map((row) => formatSubscription(row, appUrl));
 }
 
 export async function createSubscription(ownerId: string, body: unknown): Promise<SubscriptionSummary> {
@@ -218,6 +269,10 @@ export async function createSubscription(ownerId: string, body: unknown): Promis
   const config = buildLocalSubscriptionConfig(body);
   assertNodeNameFilterKeepsOutput(nodes, config);
   const autoUpdateInterval = normalizeLocalAutoUpdateIntervalSeconds(body.autoUpdateInterval);
+  const resourceCacheEnabled = body.resourceCacheEnabled === true;
+  const resourceCacheInterval = resourceCacheEnabled
+    ? normalizeResourceCacheInterval(body.resourceCacheInterval) ?? DEFAULT_RESOURCE_CACHE_INTERVAL_SECONDS
+    : null;
   const subscriptionInfo = normalizeSubscriptionInfoForPersistence(body.subscriptionInfo) ?? {};
 
   const row = await prisma.subscription.create({
@@ -230,10 +285,13 @@ export async function createSubscription(ownerId: string, body: unknown): Promis
       encryptedConfig: encryptJson(config),
       encryptedSubscriptionInfo: encryptJson(subscriptionInfo),
       autoUpdateInterval,
+      resourceCacheEnabled,
+      resourceCacheInterval,
+      resourceCacheStatus: resourceCacheEnabled ? "pending" : "disabled",
     },
     include: { autoUpdateState: true },
   });
-  return formatSubscription(row);
+  return formatSubscription(row, await getEffectivePublicAppUrl(ownerId));
 }
 
 export async function updateSubscription(ownerId: string, id: string, body: unknown): Promise<SubscriptionSummary | null> {
@@ -279,6 +337,37 @@ export async function updateSubscription(ownerId: string, id: string, body: unkn
     resetAutoUpdateState = current.autoUpdateInterval === null && nextAutoUpdateInterval !== null;
   }
 
+  const nextResourceCacheEnabled = "resourceCacheEnabled" in body
+    ? body.resourceCacheEnabled
+    : current.resourceCacheEnabled;
+  if (typeof nextResourceCacheEnabled !== "boolean") {
+    throw new Error("resourceCacheEnabled must be a boolean");
+  }
+
+  if ("resourceCacheEnabled" in body) {
+    if (typeof body.resourceCacheEnabled !== "boolean") throw new Error("resourceCacheEnabled must be a boolean");
+    data.resourceCacheEnabled = body.resourceCacheEnabled;
+    data.resourceCacheStatus = body.resourceCacheEnabled ? "pending" : "disabled";
+    data.resourceCacheLastError = null;
+    if (!body.resourceCacheEnabled) {
+      data.resourceCacheInterval = null;
+      data.resourceCacheLastAttemptedAt = null;
+      data.resourceCacheLastUpdatedAt = null;
+      data.encryptedResourceCacheEntries = null;
+    }
+    else if (!("resourceCacheInterval" in body) && current.resourceCacheInterval === null) {
+      data.resourceCacheInterval = DEFAULT_RESOURCE_CACHE_INTERVAL_SECONDS;
+    }
+  }
+  if ("resourceCacheInterval" in body) {
+    const interval = normalizeResourceCacheInterval(body.resourceCacheInterval);
+    if (nextResourceCacheEnabled && interval === null) {
+      throw new Error("启用服务器资源缓存时必须设置更新间隔");
+    }
+    data.resourceCacheInterval = nextResourceCacheEnabled ? interval : null;
+  }
+  if (hasConfig && nextResourceCacheEnabled) data.resourceCacheStatus = "pending";
+
   const row = await prisma.$transaction(async (tx) => {
     if (resetAutoUpdateState) {
       await tx.subscriptionAutoUpdateState.upsert({
@@ -293,21 +382,28 @@ export async function updateSubscription(ownerId: string, id: string, body: unkn
       include: { autoUpdateState: true },
     });
   });
-  return formatSubscription(row);
+  if (current.resourceCacheEnabled && !nextResourceCacheEnabled) {
+    await removeSubscriptionResourceCache(current.id).catch(() => undefined);
+  }
+  return formatSubscription(row, await getEffectivePublicAppUrl(ownerId));
 }
 
 export async function getSubscription(ownerId: string, id: string): Promise<SubscriptionDetail | null> {
-  const row = await prisma.subscription.findFirst({
-    where: { id, ownerId },
-    include: { autoUpdateState: true },
-  });
-  return row ? formatSubscriptionDetail(row) : null;
+  const [row, appUrl] = await Promise.all([
+    prisma.subscription.findFirst({
+      where: { id, ownerId },
+      include: { autoUpdateState: true },
+    }),
+    getEffectivePublicAppUrl(ownerId),
+  ]);
+  return row ? formatSubscriptionDetail(row, appUrl) : null;
 }
 
 export async function deleteSubscription(ownerId: string, id: string): Promise<boolean> {
   const row = await prisma.subscription.findFirst({ where: { id, ownerId }, select: { id: true } });
   if (!row) return false;
   await prisma.subscription.delete({ where: { id: row.id } });
+  await removeSubscriptionResourceCache(row.id).catch(() => undefined);
   return true;
 }
 
@@ -434,22 +530,16 @@ export async function generateSubscriptionYaml(token: string): Promise<Generated
   const row = await prisma.subscription.findUnique({ where: { token }, include: { autoUpdateState: true } });
   if (!row) return null;
   const secrets = readSubscriptionSecrets(row);
-  const { testUrl, testInterval } = getEffectiveTestOptions(secrets.config);
-  const proxyProviders = buildProxyProvidersFromConfig(secrets.config, { testUrl, testInterval });
-  if (secrets.nodes.length === 0 && !proxyProviders) return null;
-  const yaml = generateClashYaml(
-    buildGenerateOptionsFromConfig(secrets.config, {
-      nodes: secrets.nodes,
-      proxyProviders,
-    })
-  );
+  const generated = buildGeneratedSubscriptionConfig(secrets.config, secrets.nodes);
+  if (!generated) return null;
+  if (row.resourceCacheEnabled) {
+    rewriteExternalResources(generated, row.token, await getEffectivePublicAppUrl(row.ownerId));
+  }
+  const yaml = configToYaml(generated);
   await prisma.subscription.update({ where: { id: row.id }, data: { lastAccessedAt: new Date() } });
   return {
     yaml,
     name: row.name,
     subscriptionInfo: secrets.subscriptionInfo,
-    cacheExpirySeconds: CACHE_TTL_SECONDS,
-    autoUpdateIntervalSeconds: row.autoUpdateInterval,
-    isAdmin: true,
   };
 }

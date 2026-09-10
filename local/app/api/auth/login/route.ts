@@ -51,6 +51,10 @@ export async function POST(request: Request) {
 
   await prisma.localAdmin.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
   const response = NextResponse.json({ success: true, user: { id: admin.id, username: admin.username } });
-  response.cookies.set(SESSION_COOKIE, await signSession({ adminId: admin.id, username: admin.username }), sessionCookieOptions());
+  response.cookies.set(
+    SESSION_COOKIE,
+    await signSession({ adminId: admin.id, username: admin.username }),
+    await sessionCookieOptions(admin.id)
+  );
   return response;
 }

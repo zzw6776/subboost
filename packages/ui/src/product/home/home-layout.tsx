@@ -26,14 +26,7 @@ import { useProductInteractionAdapter, type ProductMode } from "@subboost/ui/pro
 import { cn } from "@subboost/ui/lib/utils";
 import type { User } from "@subboost/ui/store/user-store";
 import type { AutoUpdateIntervalPolicy } from "@subboost/core/subscription/auto-update-interval";
-
-type EditingSubscription = {
-  id: string;
-  token: string;
-  name: string;
-  autoUpdateInterval: number | null;
-  smartNodeMatchingEnabled: boolean;
-};
+import type { EditingSubscription } from "@subboost/ui/product/home/editing-subscription-types";
 
 type SubscriptionLinkState = {
   subscriptionDialog: boolean;
@@ -46,6 +39,10 @@ type SubscriptionLinkState = {
   autoUpdateHours: number;
   setAutoUpdateHours: (value: number) => void;
   autoUpdatePolicy: AutoUpdateIntervalPolicy;
+  resourceCacheEnabled: boolean;
+  setResourceCacheEnabled: (value: boolean) => void;
+  resourceCacheHours: number;
+  setResourceCacheHours: (value: number) => void;
   smartNodeMatchingEnabled: boolean;
   setSmartNodeMatchingEnabled: (value: boolean) => void;
   isCreatingSubscription: boolean;
@@ -379,6 +376,10 @@ export function HomeLayout({
         autoUpdateHours={subscription.autoUpdateHours}
         setAutoUpdateHours={subscription.setAutoUpdateHours}
         autoUpdatePolicy={subscription.autoUpdatePolicy}
+        resourceCacheEnabled={subscription.resourceCacheEnabled}
+        setResourceCacheEnabled={subscription.setResourceCacheEnabled}
+        resourceCacheHours={subscription.resourceCacheHours}
+        setResourceCacheHours={subscription.setResourceCacheHours}
         smartNodeMatchingEnabled={subscription.smartNodeMatchingEnabled}
         setSmartNodeMatchingEnabled={subscription.setSmartNodeMatchingEnabled}
         isCreatingSubscription={subscription.isCreatingSubscription}

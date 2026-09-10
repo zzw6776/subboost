@@ -33,6 +33,10 @@ type Props = {
   autoUpdateHours: number;
   setAutoUpdateHours: (value: number) => void;
   autoUpdatePolicy: AutoUpdateIntervalPolicy;
+  resourceCacheEnabled: boolean;
+  setResourceCacheEnabled: (value: boolean) => void;
+  resourceCacheHours: number;
+  setResourceCacheHours: (value: number) => void;
   smartNodeMatchingEnabled: boolean;
   setSmartNodeMatchingEnabled: (value: boolean) => void;
   isCreatingSubscription: boolean;
@@ -53,6 +57,10 @@ export function SubscriptionLinkDialog({
   autoUpdateHours,
   setAutoUpdateHours,
   autoUpdatePolicy,
+  resourceCacheEnabled,
+  setResourceCacheEnabled,
+  resourceCacheHours,
+  setResourceCacheHours,
   smartNodeMatchingEnabled,
   setSmartNodeMatchingEnabled,
   isCreatingSubscription,
@@ -66,8 +74,8 @@ export function SubscriptionLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="grid max-h-[90vh] w-[calc(100%_-_2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle className="flex items-center gap-2">
             <LinkIcon className="h-5 w-5 text-indigo-400" />
             {subscriptionUrl
@@ -84,7 +92,7 @@ export function SubscriptionLinkDialog({
         </DialogHeader>
 
         {!subscriptionUrl ? (
-          <div className="space-y-4 py-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]">
             <FormField label="订阅名称">
               <Input
                 placeholder="例如：我的配置"
@@ -133,6 +141,27 @@ export function SubscriptionLinkDialog({
                   />
                 </FormField>
               )}
+
+              <div className="my-3 border-t border-white/10" />
+
+              <SwitchField
+                label="使用服务器资源缓存"
+                description="规则集、Geo 数据和远程 Provider 由服务器下载，客户端只访问 SubBoost。"
+                checked={resourceCacheEnabled}
+                onCheckedChange={setResourceCacheEnabled}
+              />
+
+              {resourceCacheEnabled && (
+                <FormField label="资源缓存更新间隔（小时）" className="mt-4">
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={resourceCacheHours}
+                    onChange={(e) => setResourceCacheHours(Number(e.target.value))}
+                  />
+                </FormField>
+              )}
             </div>
 
             <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">
@@ -153,7 +182,7 @@ export function SubscriptionLinkDialog({
             </div>
           </div>
         ) : (
-          <div className="space-y-4 py-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]">
             <div className="space-y-2">
               <p className="text-sm font-medium">订阅链接</p>
               <div className="flex gap-2">
@@ -184,7 +213,7 @@ export function SubscriptionLinkDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-white/10 px-6 py-4">
           {!subscriptionUrl ? (
             <>
               <Button variant="outline" onClick={close}>

@@ -62,6 +62,7 @@ ENV APP_BUILD_SHA=${APP_BUILD_SHA}
 ENV APP_VERSION=${APP_VERSION}
 ENV APP_VERSION_TOKEN=${APP_VERSION_TOKEN}
 RUN apk add --no-cache openssl
+RUN mkdir -p /app/local/data/resource-cache && chown -R node:node /app/local/data
 
 COPY --chown=node:node --from=builder /package/local/.next/standalone ./
 COPY --chown=node:node --from=production-deps /package/node_modules ./node_modules

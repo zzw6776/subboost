@@ -1,13 +1,13 @@
-import {
-  resolveClientProfileUpdateIntervalSeconds,
-  type SubscriptionResponseInfo,
-} from "@subboost/core/subscription/subscription-response-info";
+import type { SubscriptionResponseInfo } from "@subboost/core/subscription/subscription-response-info";
 
 type BuildSubscriptionResponseHeadersOptions = {
   cacheControl?: string;
+  /** @deprecated 客户端更新间隔响应头已停用，仅保留参数兼容性。 */
   cacheExpirySeconds?: number;
+  /** @deprecated 客户端更新间隔响应头已停用，仅保留参数兼容性。 */
   autoUpdateIntervalSeconds?: number | null;
-  isAdmin: boolean;
+  /** @deprecated 客户端更新间隔响应头已停用，仅保留参数兼容性。 */
+  isAdmin?: boolean;
 };
 
 function normalizeHeaderFileNameBase(name: string): string {
@@ -63,15 +63,6 @@ export function buildSubscriptionResponseHeaders(
     "content-disposition": buildContentDisposition(name),
     "cache-control": options.cacheControl ?? "no-cache",
   };
-
-  const recommendedIntervalSeconds = resolveClientProfileUpdateIntervalSeconds({
-    cacheExpirySeconds: options.cacheExpirySeconds,
-    autoUpdateIntervalSeconds: options.autoUpdateIntervalSeconds,
-    isAdmin: options.isAdmin,
-  });
-  if (typeof recommendedIntervalSeconds === "number" && Number.isFinite(recommendedIntervalSeconds)) {
-    headers["profile-update-interval"] = String(Math.max(1, Math.ceil(recommendedIntervalSeconds / 3600)));
-  }
 
   const userInfoHeader = serializeSubscriptionUserInfo(subscriptionInfo);
   if (userInfoHeader) headers["subscription-userinfo"] = userInfoHeader;

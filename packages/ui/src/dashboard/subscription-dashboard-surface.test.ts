@@ -121,6 +121,16 @@ const subscription = {
   lastAccessedAt: null,
   lastUpdatedAt: "2026-01-02T00:00:00.000Z",
   autoUpdateInterval: 86400,
+  resourceCacheEnabled: false,
+  resourceCacheInterval: null,
+  resourceCache: {
+    status: "disabled",
+    lastAttemptedAt: null,
+    lastUpdatedAt: null,
+    nextUpdateAt: null,
+    lastError: null,
+    entries: [],
+  },
   smartNodeMatchingEnabled: true,
   autoUpdateState: {
     externalFailureCount: 0,
@@ -188,6 +198,7 @@ function createAdapter(overrides: Partial<DashboardSurfaceAdapter> = {}): Dashbo
     fetchSubscriptions: vi.fn(async () => [subscription]),
     deleteSubscription: vi.fn(async () => undefined),
     refreshSubscription: vi.fn(async () => ({ updated: true } as any)),
+    refreshResourceCache: vi.fn(async () => undefined),
     updateSubscriptionSettings: vi.fn(async () => undefined),
     renderAnnouncement: () => "announcement",
     renderHeaderActions: () => "header-action",
@@ -388,6 +399,8 @@ describe("SubscriptionDashboardSurface", () => {
     expect(setters[7]).toHaveBeenCalledWith(true);
     expect(setters[8]).toHaveBeenCalledWith(true);
     expect(setters[9]).toHaveBeenCalledWith(24);
+    expect(setters[10]).toHaveBeenCalledWith(false);
+    expect(setters[11]).toHaveBeenCalledWith(24);
     expect(setters[4]).toHaveBeenCalledWith(true);
 
     const settingsButtons = mocks.captures.buttons.filter((props: any) => props.title === "订阅设置（改名 / 自动更新）");
@@ -558,6 +571,8 @@ describe("SubscriptionDashboardSurface", () => {
       name: "Renamed",
       smartNodeMatchingEnabled: false,
       autoUpdateInterval: 21600,
+      resourceCacheEnabled: false,
+      resourceCacheInterval: null,
     });
     expect(stateMock.setters[0]).toHaveBeenCalledWith(expect.any(Function));
     expect(stateMock.setters[4]).toHaveBeenCalledWith(false);
@@ -574,9 +589,8 @@ describe("SubscriptionDashboardSurface", () => {
       10: false,
     });
     await mocks.captures.settingsDialog.onSave();
-    expect((stateMock.setters[0] as any).lastValue[0].autoUpdateState).toEqual(
-      quotaWarningSubscription.autoUpdateState
-    );
+    const preserveQuotaUpdate = stateMock.setters[0].mock.calls.find(([value]) => typeof value === "function")?.[0];
+    expect(preserveQuotaUpdate([quotaWarningSubscription])[0].autoUpdateState).toEqual(quotaWarningSubscription.autoUpdateState);
 
     renderSurface(adapter, {
       0: [disabledSubscription],
@@ -590,7 +604,32 @@ describe("SubscriptionDashboardSurface", () => {
       10: false,
     });
     await mocks.captures.settingsDialog.onSave();
-    expect((stateMock.setters[0] as any).lastValue[0].autoUpdateState).toEqual(subscription.autoUpdateState);
+    const resetDisabledUpdate = stateMock.setters[0].mock.calls.find(([value]) => typeof value === "function")?.[0];
+    expect(resetDisabledUpdate([disabledSubscription])[0].autoUpdateState).toEqual(subscription.autoUpdateState);
+
+    const cacheAdapter = createAdapter();
+    renderSurface(cacheAdapter, {
+      0: [subscription],
+      1: false,
+      4: true,
+      5: subscription,
+      6: "Cached",
+      7: true,
+      8: false,
+      9: 24,
+      10: true,
+      11: 12,
+      13: false,
+    });
+    await mocks.captures.settingsDialog.onSave();
+    expect(cacheAdapter.updateSubscriptionSettings).toHaveBeenCalledWith("sub-1", {
+      name: "Cached",
+      smartNodeMatchingEnabled: true,
+      autoUpdateInterval: null,
+      resourceCacheEnabled: true,
+      resourceCacheInterval: 43200,
+    });
+    expect(cacheAdapter.refreshResourceCache).toHaveBeenCalledWith("sub-1");
 
     renderSurface(adapter, { 0: [subscription], 1: false, 4: true, 5: subscription, 6: "Manual", 7: true, 8: false, 9: 24, 10: false });
     await mocks.captures.settingsDialog.onSave();
@@ -598,12 +637,14 @@ describe("SubscriptionDashboardSurface", () => {
       name: "Manual",
       smartNodeMatchingEnabled: true,
       autoUpdateInterval: null,
+      resourceCacheEnabled: false,
+      resourceCacheInterval: null,
     });
 
     const guardedAdapter = createAdapter();
     renderSurface(guardedAdapter, { 0: [subscription], 1: false, 4: true, 5: null, 6: "No sub", 7: true, 8: false, 9: 24, 10: false });
     await mocks.captures.settingsDialog.onSave();
-    renderSurface(guardedAdapter, { 0: [subscription], 1: false, 4: true, 5: subscription, 6: "Saving", 7: true, 8: false, 9: 24, 10: true });
+    renderSurface(guardedAdapter, { 0: [subscription], 1: false, 4: true, 5: subscription, 6: "Saving", 7: true, 8: false, 9: 24, 13: true });
     await mocks.captures.settingsDialog.onSave();
     expect(guardedAdapter.updateSubscriptionSettings).not.toHaveBeenCalled();
 

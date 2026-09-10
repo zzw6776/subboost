@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { json } from "@local/lib/http";
 import { requireLocalCronAuth } from "@local/lib/cron-auth";
 import { runLocalSubscriptionAutoUpdateCron } from "@local/lib/auto-update-service";
+import { runResourceCacheAutoUpdateCron } from "@local/lib/resource-cache";
 import {
   acquireLocalJobLease,
   JobLeaseLostError,
@@ -25,12 +26,17 @@ export async function POST(request: NextRequest) {
     if (!lease) return json({ success: true, skipped: true, reason: "already_running" });
 
     heartbeat = startLocalJobLeaseHeartbeat({ lease, leaseMs: LEASE_MS, intervalMs: HEARTBEAT_MS });
-    const summary = await runLocalSubscriptionAutoUpdateCron(new Date(), {
+    const now = new Date();
+    const summary = await runLocalSubscriptionAutoUpdateCron(now, {
       assertLease: heartbeat.assertOwned,
     });
+    await heartbeat.assertOwned();
+    const resourceCache = await runResourceCacheAutoUpdateCron(now);
+    await heartbeat.assertOwned();
     return json({
       success: true,
       ...summary,
+      resourceCache,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

@@ -168,7 +168,7 @@ describe("local subscription routes", () => {
     expect(pluralResponse.headers.get("subscription-userinfo")).toBe(
       "upload=64; download=128; total=1024; expire=1781635200"
     );
-    expect(pluralResponse.headers.get("profile-update-interval")).toBe("24");
+    expect(pluralResponse.headers.get("profile-update-interval")).toBeNull();
     expect(await pluralResponse.text()).toBe("mixed-port: 7890\n");
     expect(generateSubscriptionYaml).toHaveBeenCalledWith("token-1");
   });

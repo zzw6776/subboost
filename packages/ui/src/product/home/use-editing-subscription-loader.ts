@@ -599,6 +599,13 @@ export function useEditingSubscriptionLoader({
             token: sub.token,
             name: sub.name || "未命名订阅",
             autoUpdateInterval,
+            resourceCacheEnabled: sub.resourceCacheEnabled === true,
+            resourceCacheInterval:
+              typeof sub.resourceCacheInterval === "number" &&
+              Number.isFinite(sub.resourceCacheInterval) &&
+              sub.resourceCacheInterval >= 3600
+                ? Math.round(sub.resourceCacheInterval)
+                : null,
             smartNodeMatchingEnabled: (cfg as any).smartNodeMatchingEnabled !== false,
           });
           setSubscriptionName(sub.name || "");

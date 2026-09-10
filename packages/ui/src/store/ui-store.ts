@@ -1,12 +1,5 @@
 import { create } from "zustand";
-
-type EditingSubscription = {
-  id: string;
-  token: string;
-  name: string;
-  autoUpdateInterval: number | null;
-  smartNodeMatchingEnabled: boolean;
-};
+import type { EditingSubscription } from "@subboost/ui/product/home/editing-subscription-types";
 
 interface UIState {
   // 编辑“我的订阅”时的上下文（仅用于跨页面导航保留，不持久化到 localStorage）
@@ -20,5 +13,3 @@ export const useUIStore = create<UIState>()((set) => ({
   setEditingSubscription: (subscription) => set({ editingSubscription: subscription }),
   clearEditingSubscription: () => set({ editingSubscription: null }),
 }));
-
-

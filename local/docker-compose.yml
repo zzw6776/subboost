@@ -41,6 +41,9 @@ services:
       APP_BUILD_SHA: ${APP_BUILD_SHA:-}
       APP_VERSION: ${APP_VERSION:-}
       APP_VERSION_TOKEN: ${APP_VERSION_TOKEN:-}
+      RESOURCE_CACHE_DIR: /app/local/data/resource-cache
+    volumes:
+      - subboost-resource-cache:/app/local/data/resource-cache
 
   cron:
     image: curlimages/curl:8.11.1
@@ -59,3 +62,4 @@ services:
 
 volumes:
   subboost-local-db:
+  subboost-resource-cache:

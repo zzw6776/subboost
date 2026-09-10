@@ -36,9 +36,6 @@ export async function GET(request: Request, { params }: RouteContext) {
   return new Response(result.yaml, {
     headers: buildSubscriptionResponseHeaders(result.name, result.subscriptionInfo, {
       cacheControl: "no-store",
-      cacheExpirySeconds: result.cacheExpirySeconds,
-      autoUpdateIntervalSeconds: result.autoUpdateIntervalSeconds,
-      isAdmin: result.isAdmin,
     }),
   });
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { LogOut, Network, ServerCog, ShieldCheck } from "lucide-react";
+import { Globe2, LogOut, Network, ServerCog, ShieldCheck } from "lucide-react";
 
 import { Button } from "@subboost/ui/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@subboost/ui/components/ui/card";
 import { SwitchField } from "@subboost/ui/components/ui/switch-field";
+import { Input } from "@subboost/ui/components/ui/input";
 import { useUserStore } from "@subboost/ui/store/user-store";
 
 export default function SettingsPage() {
@@ -14,6 +15,11 @@ export default function SettingsPage() {
   const [sourceImportLoading, setSourceImportLoading] = React.useState(true);
   const [sourceImportSaving, setSourceImportSaving] = React.useState(false);
   const [sourceImportError, setSourceImportError] = React.useState<string | null>(null);
+  const [publicAppUrl, setPublicAppUrl] = React.useState("");
+  const [fallbackAppUrl, setFallbackAppUrl] = React.useState("");
+  const [appUrlLoading, setAppUrlLoading] = React.useState(true);
+  const [appUrlSaving, setAppUrlSaving] = React.useState(false);
+  const [appUrlError, setAppUrlError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     void fetchUser();
@@ -50,6 +56,51 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [user]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!user) {
+      setAppUrlLoading(false);
+      return () => { cancelled = true; };
+    }
+    setAppUrlLoading(true);
+    void fetch("/api/settings/app-url", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json() as { publicAppUrl?: unknown; fallbackAppUrl?: unknown; error?: unknown };
+        if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "加载失败");
+        if (!cancelled) {
+          setPublicAppUrl(typeof body.publicAppUrl === "string" ? body.publicAppUrl : "");
+          setFallbackAppUrl(typeof body.fallbackAppUrl === "string" ? body.fallbackAppUrl : "");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setAppUrlError(error instanceof Error ? error.message : "加载失败");
+      })
+      .finally(() => {
+        if (!cancelled) setAppUrlLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  const savePublicAppUrl = async () => {
+    setAppUrlSaving(true);
+    setAppUrlError(null);
+    try {
+      const response = await fetch("/api/settings/app-url", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicAppUrl: publicAppUrl.trim() }),
+      });
+      const body = await response.json() as { publicAppUrl?: unknown; fallbackAppUrl?: unknown; error?: unknown };
+      if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "保存失败");
+      setPublicAppUrl(typeof body.publicAppUrl === "string" ? body.publicAppUrl : "");
+      setFallbackAppUrl(typeof body.fallbackAppUrl === "string" ? body.fallbackAppUrl : fallbackAppUrl);
+    } catch (error) {
+      setAppUrlError(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setAppUrlSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -111,6 +162,33 @@ export default function SettingsPage() {
             <Button variant="destructive" className="gap-2" onClick={() => void handleLogout()} disabled={!user}>
               <LogOut className="h-4 w-4" />
               退出登录
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+            <div className="rounded-lg bg-violet-500/20 p-2 text-violet-300">
+              <Globe2 className="h-5 w-5" />
+            </div>
+            <CardTitle className="text-base">公开访问地址</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-white/60">
+              用于复制订阅链接、服务器缓存资源地址和 HTTPS Cookie。反向代理时填写外部实际访问地址。
+            </p>
+            <Input
+              value={publicAppUrl}
+              onChange={(event) => setPublicAppUrl(event.target.value)}
+              placeholder={fallbackAppUrl || "https://sub.example.com"}
+              disabled={!user || appUrlLoading || appUrlSaving}
+            />
+            <p className="text-xs text-white/40">
+              留空时使用 APP_URL：{fallbackAppUrl || "-"}
+            </p>
+            {appUrlError && <p className="text-xs text-red-300">{appUrlError}</p>}
+            <Button onClick={() => void savePublicAppUrl()} disabled={!user || appUrlLoading || appUrlSaving}>
+              {appUrlSaving ? "保存中..." : "保存公开地址"}
             </Button>
           </CardContent>
         </Card>

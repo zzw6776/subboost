@@ -15,6 +15,7 @@ model LocalAdmin {
   updatedAt    DateTime  @updatedAt
   lastLoginAt  DateTime?
   allowUnsafeSubscriptionSources Boolean @default(false)
+  publicAppUrl                   String?
 
   subscriptions Subscription[]
   templates      LocalTemplate[]
@@ -46,6 +47,13 @@ model Subscription {
   encryptedConfig               String    @db.Text
   encryptedSubscriptionInfo     String?   @db.Text
   autoUpdateInterval            Int?
+  resourceCacheEnabled          Boolean   @default(false)
+  resourceCacheInterval         Int?
+  resourceCacheStatus           String    @default("disabled")
+  resourceCacheLastAttemptedAt  DateTime?
+  resourceCacheLastUpdatedAt    DateTime?
+  resourceCacheLastError        String?
+  encryptedResourceCacheEntries String?   @db.Text
   cacheExpiresAt                DateTime?
   lastAccessedAt                DateTime?
   lastUpdatedAt                 DateTime?

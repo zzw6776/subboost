@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
-import { isHttpsAppUrl, requireEnv } from "./env";
+import { requireEnv } from "./env";
+import { getEffectivePublicAppUrl } from "./public-app-url";
 
 export const SESSION_COOKIE = "subboost_local_session";
 
@@ -35,21 +36,21 @@ export async function readSession(): Promise<SessionPayload | null> {
   }
 }
 
-export function sessionCookieOptions() {
+export async function sessionCookieOptions(ownerId?: string) {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: isHttpsAppUrl(),
+    secure: (await getEffectivePublicAppUrl(ownerId)).startsWith("https://"),
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   };
 }
 
-export function clearSessionCookieOptions() {
+export async function clearSessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: isHttpsAppUrl(),
+    secure: (await getEffectivePublicAppUrl()).startsWith("https://"),
     path: "/",
     maxAge: 0,
   };

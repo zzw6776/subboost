@@ -106,6 +106,10 @@ const baseProps = {
     stepHours: 1,
     requireIntegerHours: true,
   },
+  resourceCacheEnabled: false,
+  setResourceCacheEnabled: vi.fn(),
+  resourceCacheHours: 24,
+  setResourceCacheHours: vi.fn(),
   smartNodeMatchingEnabled: true,
   setSmartNodeMatchingEnabled: vi.fn(),
   isCreatingSubscription: false,
@@ -131,6 +135,7 @@ describe("SubscriptionLinkDialog", () => {
         ...baseProps,
         autoUpdateEnabled: true,
         autoUpdateHours: 8,
+        resourceCacheEnabled: true,
       })
     );
 
@@ -139,23 +144,30 @@ describe("SubscriptionLinkDialog", () => {
     expect(html).toContain("更新时智能匹配节点");
     expect(html).toContain("启用自动更新");
     expect(html).toContain("自动更新间隔");
+    expect(html).toContain("使用服务器资源缓存");
+    expect(html).toContain("资源缓存更新间隔");
     expect(html).toContain("注意事项");
     expect(html).toContain("订阅链接相当于访问凭证，请勿公开分享");
     expect(html).toContain("客户端高频拉取订阅会被封禁，请合理配置");
     expect(captures.inputs[0]).toMatchObject({ value: "我的配置", maxLength: 100 });
     expect(captures.inputs[1]).toMatchObject({ type: "number", min: 12, step: 1, value: 8 });
-    expect(captures.switches).toHaveLength(2);
+    expect(captures.inputs[2]).toMatchObject({ type: "number", min: 1, step: 1, value: 24 });
+    expect(captures.switches).toHaveLength(3);
 
     captures.inputs[0].onChange({ target: { value: "新配置" } });
     captures.inputs[1].onChange({ target: { value: "12" } });
+    captures.inputs[2].onChange({ target: { value: "48" } });
     captures.switches[0].onCheckedChange(false);
     captures.switches[1].onCheckedChange(false);
+    captures.switches[2].onCheckedChange(false);
     captures.buttons.at(-1).onClick();
 
     expect(baseProps.setSubscriptionName).toHaveBeenCalledWith("新配置");
     expect(baseProps.setAutoUpdateHours).toHaveBeenCalledWith(12);
+    expect(baseProps.setResourceCacheHours).toHaveBeenCalledWith(48);
     expect(baseProps.setSmartNodeMatchingEnabled).toHaveBeenCalledWith(false);
     expect(baseProps.setAutoUpdateEnabled).toHaveBeenCalledWith(false);
+    expect(baseProps.setResourceCacheEnabled).toHaveBeenCalledWith(false);
     expect(baseProps.handleCreateSubscription).toHaveBeenCalled();
   });
 

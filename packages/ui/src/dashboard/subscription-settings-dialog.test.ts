@@ -78,6 +78,16 @@ const baseProps = {
     createdAt: "2026-01-01T00:00:00.000Z",
     lastUpdatedAt: null,
     autoUpdateInterval: null,
+    resourceCacheEnabled: false,
+    resourceCacheInterval: null,
+    resourceCache: {
+      status: "disabled",
+      lastAttemptedAt: null,
+      lastUpdatedAt: null,
+      nextUpdateAt: null,
+      lastError: null,
+      entries: [],
+    },
     smartNodeMatchingEnabled: true,
     autoUpdateState: {
       externalFailureCount: 0,
@@ -101,6 +111,12 @@ const baseProps = {
   setAutoUpdateEnabled: vi.fn(),
   autoUpdateHours: 24,
   setAutoUpdateHours: vi.fn(),
+  resourceCacheEnabled: false,
+  setResourceCacheEnabled: vi.fn(),
+  resourceCacheHours: 24,
+  setResourceCacheHours: vi.fn(),
+  refreshingResourceCache: false,
+  onRefreshResourceCache: vi.fn(),
   savingSettings: false,
   onSave: vi.fn(),
   userIsAdmin: false,
@@ -122,20 +138,37 @@ describe("SubscriptionSettingsDialog", () => {
     expect(html).toContain("订阅设置");
     expect(html).toContain("最小 6 小时");
     expect(html).toContain("自动更新已关闭：fetch_failed");
+    expect(html).not.toContain("保存后首次更新");
     expect(captures.inputs[0]).toMatchObject({ value: "Primary", maxLength: 100 });
-    expect(captures.switches).toHaveLength(2);
+    expect(captures.switches).toHaveLength(3);
 
     captures.inputs[0].onChange({ target: { value: "Renamed" } });
     captures.switches[0].onCheckedChange(false);
     captures.switches[1].onCheckedChange(true);
+    captures.switches[2].onCheckedChange(true);
     captures.buttons[0].onClick();
     captures.buttons[1].onClick();
 
     expect(baseProps.setSettingsName).toHaveBeenCalledWith("Renamed");
     expect(baseProps.setSmartNodeMatchingEnabled).toHaveBeenCalledWith(false);
     expect(baseProps.setAutoUpdateEnabled).toHaveBeenCalledWith(true);
+    expect(baseProps.setResourceCacheEnabled).toHaveBeenCalledWith(true);
     expect(baseProps.onOpenChange).toHaveBeenCalledWith(false);
     expect(baseProps.onSave).toHaveBeenCalled();
+  });
+
+  it("shows cache details immediately when enabling an unsaved cache", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SubscriptionSettingsDialog, {
+        ...baseProps,
+        resourceCacheEnabled: true,
+      })
+    );
+
+    expect(html).toContain("资源缓存更新间隔");
+    expect(html).toContain("保存后首次更新");
+    expect(html).toContain("保存后可立即更新");
+    expect(captures.buttons[0]).toMatchObject({ disabled: true });
   });
 
   it("renders auto-update interval input and saving state", () => {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runLocalSubscriptionAutoUpdateCron } from "@local/lib/auto-update-service";
+import { runResourceCacheAutoUpdateCron } from "@local/lib/resource-cache";
 import { refreshRuleIndex } from "@local/lib/rule-catalog";
 import * as updateSubscriptionsRoute from "../app/api/cron/update-subscriptions/route";
 import * as updateRuleIndexRoute from "../app/api/cron/update-rule-index/route";
@@ -15,6 +16,10 @@ const leaseMocks = vi.hoisted(() => ({
 
 vi.mock("@local/lib/auto-update-service", () => ({
   runLocalSubscriptionAutoUpdateCron: vi.fn(),
+}));
+
+vi.mock("@local/lib/resource-cache", () => ({
+  runResourceCacheAutoUpdateCron: vi.fn(),
 }));
 
 vi.mock("@local/lib/rule-catalog", () => ({
@@ -67,6 +72,12 @@ beforeEach(() => {
     failedSubscriptions: [],
     updatedUsers: [],
     topHosts: [],
+  });
+  vi.mocked(runResourceCacheAutoUpdateCron).mockResolvedValue({
+    total: 0,
+    updated: 0,
+    skipped: 0,
+    failed: 0,
   });
   vi.mocked(refreshRuleIndex).mockResolvedValue({
     status: "skipped",
@@ -131,6 +142,7 @@ describe("local cron routes", () => {
     const response = await updateSubscriptionsRoute.POST(cronRequest("secret-1"));
     expect(response.status).toBe(200);
     expect(runLocalSubscriptionAutoUpdateCron).toHaveBeenCalledTimes(1);
+    expect(runResourceCacheAutoUpdateCron).toHaveBeenCalledTimes(1);
     expect((await readJson(response)).success).toBe(true);
   });
 

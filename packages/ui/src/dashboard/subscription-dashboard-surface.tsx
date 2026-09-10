@@ -47,6 +47,8 @@ type UpdateSettingsPayload = {
   name: string;
   smartNodeMatchingEnabled: boolean;
   autoUpdateInterval: number | null;
+  resourceCacheEnabled: boolean;
+  resourceCacheInterval: number | null;
 };
 
 export type DashboardSurfaceAdapter = {
@@ -61,6 +63,7 @@ export type DashboardSurfaceAdapter = {
   fetchSubscriptions: () => Promise<Subscription[]>;
   deleteSubscription: (id: string) => Promise<void>;
   refreshSubscription: (id: string) => Promise<RefreshSubscriptionResponse>;
+  refreshResourceCache: (id: string) => Promise<void>;
   updateSubscriptionSettings: (id: string, payload: UpdateSettingsPayload) => Promise<void>;
   resolveDownloadUrl?: (subscription: Subscription) => string;
   renderAnnouncement?: (context: { user: User }) => React.ReactNode;
@@ -114,6 +117,9 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
     [adapter.autoUpdateIntervalPolicy, user?.isAdmin]
   );
   const [autoUpdateHours, setAutoUpdateHours] = React.useState<number>(autoUpdatePolicy.defaultHours);
+  const [resourceCacheEnabled, setResourceCacheEnabled] = React.useState(false);
+  const [resourceCacheHours, setResourceCacheHours] = React.useState(24);
+  const [refreshingResourceCache, setRefreshingResourceCache] = React.useState(false);
   const [savingSettings, setSavingSettings] = React.useState(false);
 
   React.useEffect(() => {
@@ -124,6 +130,7 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
     try {
       const nextSubscriptions = await adapter.fetchSubscriptions();
       setSubscriptions(nextSubscriptions);
+      setSettingsSub((current) => current ? nextSubscriptions.find((item) => item.id === current.id) ?? current : null);
     } catch (error) {
       console.error("Failed to fetch subscriptions:", error);
       setSubscriptions([]);
@@ -240,7 +247,23 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
     const hours = sub.autoUpdateInterval ? autoUpdateIntervalSecondsToHours(sub.autoUpdateInterval) : autoUpdatePolicy.defaultHours;
     setAutoUpdateHours(Math.max(autoUpdatePolicy.minHours, Number.isFinite(hours) ? hours : autoUpdatePolicy.defaultHours));
     setAutoUpdateEnabled(Boolean(sub.autoUpdateInterval));
+    setResourceCacheEnabled(Boolean(sub.resourceCacheEnabled));
+    setResourceCacheHours(Math.max(1, (sub.resourceCacheInterval ?? 86400) / 3600));
     setSettingsOpen(true);
+  };
+
+  const refreshResourceCache = async () => {
+    if (!settingsSub || refreshingResourceCache) return;
+    setRefreshingResourceCache(true);
+    try {
+      await adapter.refreshResourceCache(settingsSub.id);
+      toast({ title: "服务器资源缓存已更新" });
+    } catch (error) {
+      toast({ title: error instanceof Error ? error.message : "资源缓存更新失败", variant: "destructive" });
+    } finally {
+      await fetchSubscriptions();
+      setRefreshingResourceCache(false);
+    }
   };
 
   const saveSubscriptionSettings = async () => {
@@ -272,6 +295,12 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
     }
 
     const nextAutoUpdateInterval = autoUpdateEnabled ? autoUpdateIntervalHoursToSeconds(hoursValue) : null;
+    const resourceHoursValue = Number(resourceCacheHours);
+    if (resourceCacheEnabled && (!Number.isInteger(resourceHoursValue) || resourceHoursValue < 1)) {
+      toast({ title: "资源缓存更新间隔必须是不少于 1 的整数小时", variant: "warning" });
+      return;
+    }
+    const nextResourceCacheInterval = resourceCacheEnabled ? resourceHoursValue * 3600 : null;
     const shouldResetAutoUpdateState = settingsSub.autoUpdateInterval === null && nextAutoUpdateInterval !== null;
     setSavingSettings(true);
     try {
@@ -279,7 +308,18 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
         name,
         smartNodeMatchingEnabled,
         autoUpdateInterval: nextAutoUpdateInterval,
+        resourceCacheEnabled,
+        resourceCacheInterval: nextResourceCacheInterval,
       });
+
+      let resourceRefreshError: unknown = null;
+      if (resourceCacheEnabled && (!settingsSub.resourceCacheEnabled || settingsSub.resourceCache.status === "pending")) {
+        try {
+          await adapter.refreshResourceCache(settingsSub.id);
+        } catch (error) {
+          resourceRefreshError = error;
+        }
+      }
 
       setSubscriptions((prev) =>
         prev.map((s) =>
@@ -289,6 +329,8 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
                 name,
                 smartNodeMatchingEnabled,
                 autoUpdateInterval: nextAutoUpdateInterval,
+                resourceCacheEnabled,
+                resourceCacheInterval: nextResourceCacheInterval,
                 ...(shouldResetAutoUpdateState
                   ? {
                       autoUpdateState: createResetDashboardAutoUpdateState(),
@@ -299,6 +341,14 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
         )
       );
       setSettingsOpen(false);
+      await fetchSubscriptions();
+      if (resourceRefreshError) {
+        toast({
+          title: "设置已保存，但首次资源缓存更新失败",
+          description: resourceRefreshError instanceof Error ? resourceRefreshError.message : "请稍后手动重试",
+          variant: "warning",
+        });
+      }
     } catch (error) {
       console.error("Failed to save subscription settings:", error);
       toast({ title: error instanceof Error ? error.message : "保存失败，请稍后重试", variant: "destructive" });
@@ -393,6 +443,12 @@ export function SubscriptionDashboardSurface({ adapter }: Props) {
         setAutoUpdateEnabled={setAutoUpdateEnabled}
         autoUpdateHours={autoUpdateHours}
         setAutoUpdateHours={setAutoUpdateHours}
+        resourceCacheEnabled={resourceCacheEnabled}
+        setResourceCacheEnabled={setResourceCacheEnabled}
+        resourceCacheHours={resourceCacheHours}
+        setResourceCacheHours={setResourceCacheHours}
+        refreshingResourceCache={refreshingResourceCache}
+        onRefreshResourceCache={refreshResourceCache}
         savingSettings={savingSettings}
         onSave={saveSubscriptionSettings}
         userIsAdmin={user?.isAdmin === true}

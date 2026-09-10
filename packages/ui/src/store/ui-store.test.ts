@@ -12,6 +12,8 @@ describe("useUIStore", () => {
       token: "token-1",
       name: "Primary",
       autoUpdateInterval: 86400,
+      resourceCacheEnabled: true,
+      resourceCacheInterval: 86400,
       smartNodeMatchingEnabled: true,
     };
 

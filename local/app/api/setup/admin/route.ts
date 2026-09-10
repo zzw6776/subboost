@@ -61,6 +61,10 @@ export async function POST(request: Request) {
     success: true,
     user: admin,
   });
-  response.cookies.set(SESSION_COOKIE, await signSession({ adminId: admin.id, username: admin.username }), sessionCookieOptions());
+  response.cookies.set(
+    SESSION_COOKIE,
+    await signSession({ adminId: admin.id, username: admin.username }),
+    await sessionCookieOptions(admin.id)
+  );
   return response;
 }

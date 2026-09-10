@@ -41,6 +41,12 @@ const localDashboardAdapter: DashboardSurfaceAdapter = {
     const data = await readJsonResponse<RefreshSubscriptionResponse>(response, "刷新失败");
     return data;
   },
+  refreshResourceCache: async (id) => {
+    const response = await fetch(`/api/subscriptions/${encodeURIComponent(id)}/resource-cache/refresh`, {
+      method: "POST",
+    });
+    await readJsonResponse<{ error?: string }>(response, "资源缓存更新失败");
+  },
   updateSubscriptionSettings: async (id, payload) => {
     const response = await fetch(`/api/subscriptions/${encodeURIComponent(id)}`, {
       method: "PUT",

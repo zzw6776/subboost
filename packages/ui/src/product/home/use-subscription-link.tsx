@@ -37,14 +37,7 @@ import {
   type ProductMode,
 } from "@subboost/ui/product/interactions";
 import { copyTextToClipboard } from "@subboost/ui/lib/clipboard";
-
-type EditingSubscription = {
-  id: string;
-  token: string;
-  name: string;
-  autoUpdateInterval: number | null;
-  smartNodeMatchingEnabled: boolean;
-};
+import type { EditingSubscription } from "@subboost/ui/product/home/editing-subscription-types";
 
 export type HomeSubscriptionSaveInput = {
   isEditing: boolean;
@@ -139,6 +132,8 @@ export function useSubscriptionLink({
   const [subscriptionUrl, setSubscriptionUrl] = React.useState("");
   const [autoUpdateEnabled, setAutoUpdateEnabled] = React.useState(false);
   const [autoUpdateHours, setAutoUpdateHours] = React.useState(autoUpdatePolicy.defaultHours);
+  const [resourceCacheEnabled, setResourceCacheEnabled] = React.useState(false);
+  const [resourceCacheHours, setResourceCacheHours] = React.useState(24);
   const [smartNodeMatchingEnabled, setSmartNodeMatchingEnabled] = React.useState(true);
   const [isCreatingSubscription, setIsCreatingSubscription] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -194,6 +189,8 @@ export function useSubscriptionLink({
     );
     setAutoUpdateEnabled(nextAutoUpdateEnabled);
     setAutoUpdateHours(nextAutoUpdateHours);
+    setResourceCacheEnabled(editingSubscription?.resourceCacheEnabled === true);
+    setResourceCacheHours(Math.max(1, (editingSubscription?.resourceCacheInterval ?? 86400) / 3600));
     setSmartNodeMatchingEnabled(editingSubscription?.smartNodeMatchingEnabled !== false);
     setSubscriptionUrl("");
     setSubscriptionDialog(true);
@@ -289,6 +286,13 @@ export function useSubscriptionLink({
     }
 
     const nextAutoUpdateInterval = autoUpdateEnabled ? autoUpdateIntervalHoursToSeconds(hoursValue) : null;
+    const resourceHoursValue = Number(resourceCacheHours);
+    if (resourceCacheEnabled && (!Number.isInteger(resourceHoursValue) || resourceHoursValue < 1)) {
+      trackSubscriptionMutation("validationError");
+      toast({ title: "资源缓存更新间隔必须是不少于 1 的整数小时", variant: "warning" });
+      return;
+    }
+    const nextResourceCacheInterval = resourceCacheEnabled ? resourceHoursValue * 3600 : null;
     if (!subscriptionAdapter?.saveSubscription) {
       trackSubscriptionMutation("runtimeError");
       toast({ title: "当前应用未配置订阅保存接口", variant: "destructive" });
@@ -314,6 +318,8 @@ export function useSubscriptionLink({
           name: subscriptionName,
           templateId: appliedTemplateId,
           autoUpdateInterval: nextAutoUpdateInterval,
+          resourceCacheEnabled,
+          resourceCacheInterval: nextResourceCacheInterval,
           urls: storeSources
             .filter((s) => s.type === "url")
             .map((s) => s.content)
@@ -442,6 +448,8 @@ export function useSubscriptionLink({
             name: subscriptionName,
             token,
             autoUpdateInterval: nextAutoUpdateInterval,
+            resourceCacheEnabled,
+            resourceCacheInterval: nextResourceCacheInterval,
             smartNodeMatchingEnabled,
           });
         }
@@ -484,6 +492,8 @@ export function useSubscriptionLink({
     moduleRuleEditWarningAccepted,
     nodes,
     proxyGroupNameOverrides,
+    resourceCacheEnabled,
+    resourceCacheHours,
     ruleProviderBaseUrl,
     setEditingSubscription,
     smartNodeMatchingEnabled,
@@ -527,6 +537,10 @@ export function useSubscriptionLink({
     autoUpdateHours,
     setAutoUpdateHours,
     autoUpdatePolicy: autoUpdatePolicy as AutoUpdateIntervalPolicy,
+    resourceCacheEnabled,
+    setResourceCacheEnabled,
+    resourceCacheHours,
+    setResourceCacheHours,
     smartNodeMatchingEnabled,
     setSmartNodeMatchingEnabled,
     isCreatingSubscription,

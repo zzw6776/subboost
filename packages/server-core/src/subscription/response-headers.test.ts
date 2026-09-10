@@ -4,7 +4,7 @@ import { buildSubscriptionResponseHeaders } from "./response-headers";
 
 describe("subscription response headers", () => {
   it("uses the subscription name without adding yaml to client-visible filenames", () => {
-    const headers = buildSubscriptionResponseHeaders("我的配置 2026/06/17.yaml", {}, { isAdmin: false });
+    const headers = buildSubscriptionResponseHeaders("我的配置 2026/06/17.yaml", {}, {});
 
     expect(headers["content-disposition"]).not.toContain("filename=");
     expect(headers["content-disposition"]).toContain("filename*=UTF-8''");
@@ -15,7 +15,7 @@ describe("subscription response headers", () => {
   });
 
   it("keeps a plain filename fallback for safe ASCII subscription names", () => {
-    const headers = buildSubscriptionResponseHeaders("Main", {}, { isAdmin: true });
+    const headers = buildSubscriptionResponseHeaders("Main", {}, {});
 
     expect(headers["content-disposition"]).toBe("attachment; filename=\"Main\"; filename*=UTF-8''Main");
   });
@@ -33,15 +33,12 @@ describe("subscription response headers", () => {
       },
       {
         cacheControl: "no-store",
-        cacheExpirySeconds: 3600,
-        autoUpdateIntervalSeconds: 86400,
-        isAdmin: true,
       }
     );
 
     expect(headers["cache-control"]).toBe("no-store");
     expect(headers["subscription-userinfo"]).toBe("upload=1024; download=2048; total=4096; expire=1781635200");
-    expect(headers["profile-update-interval"]).toBe("24");
+    expect(headers["profile-update-interval"]).toBeUndefined();
     expect(headers["plan-name"]).toBe("Pro");
     expect(headers["profile-web-page-url"]).toBe("https://example.com/account");
   });

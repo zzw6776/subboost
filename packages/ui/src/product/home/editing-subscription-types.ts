@@ -5,6 +5,8 @@ export type EditingSubscription = {
   token: string;
   name: string;
   autoUpdateInterval: number | null;
+  resourceCacheEnabled: boolean;
+  resourceCacheInterval: number | null;
   smartNodeMatchingEnabled: boolean;
 };
 

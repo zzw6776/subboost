@@ -235,6 +235,8 @@ describe("useSubscriptionLink", () => {
     hook.setSubscriptionName(" My Sub ");
     hook.setAutoUpdateEnabled(true);
     hook.setAutoUpdateHours(24);
+    hook.setResourceCacheEnabled(true);
+    hook.setResourceCacheHours(48);
     hook = useRenderedHook({ subscriptionAdapter: adapter });
 
     await hook.handleCreateSubscription();
@@ -248,6 +250,8 @@ describe("useSubscriptionLink", () => {
           name: " My Sub ",
           templateId: "template-1",
           autoUpdateInterval: 86_400,
+          resourceCacheEnabled: true,
+          resourceCacheInterval: 172_800,
           urls: ["https://airport.example/sub"],
           subscriptionInfo: { upload: 2_048, download: 1_024, total: 4_096 },
           config: expect.objectContaining({
