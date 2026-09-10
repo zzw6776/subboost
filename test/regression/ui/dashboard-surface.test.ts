@@ -295,7 +295,9 @@ describe("public dashboard surface remaining branch coverage", () => {
     });
 
     await mocks.captures.settingsDialog.onSave();
-    const updater = setters[0].mock.calls.at(-1)?.[0] as (prev: Subscription[]) => Subscription[];
+    const updater = setters[0].mock.calls
+      .map(([value]) => value)
+      .findLast((value) => typeof value === "function") as (prev: Subscription[]) => Subscription[];
     const updated = updater([subscription, sibling]);
     expect(updated[0]).toMatchObject({
       id: "sub-1",

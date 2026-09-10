@@ -657,4 +657,83 @@ describe("SubscriptionDashboardSurface", () => {
       expect.objectContaining({ message: "save failed" })
     );
   });
+
+  it("guards, refreshes, and reports resource cache actions", async () => {
+    const guarded = createAdapter();
+    renderSurface(guarded, { 0: [subscription], 5: null, 12: false });
+    await mocks.captures.settingsDialog.onRefreshResourceCache();
+    renderSurface(guarded, { 0: [subscription], 5: subscription, 12: true });
+    await mocks.captures.settingsDialog.onRefreshResourceCache();
+    expect(guarded.refreshResourceCache).not.toHaveBeenCalled();
+
+    const success = createAdapter();
+    renderSurface(success, { 0: [subscription], 5: subscription, 12: false });
+    await mocks.captures.settingsDialog.onRefreshResourceCache();
+    expect(success.refreshResourceCache).toHaveBeenCalledWith("sub-1");
+    expect(mocks.toast).toHaveBeenCalledWith({ title: "服务器资源缓存已更新" });
+    expect(success.fetchSubscriptions).toHaveBeenCalled();
+
+    const error = createAdapter({ refreshResourceCache: vi.fn(async () => { throw new Error("cache failed"); }) });
+    renderSurface(error, { 0: [subscription], 5: subscription, 12: false });
+    await mocks.captures.settingsDialog.onRefreshResourceCache();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "cache failed", variant: "destructive" }));
+
+    const unknown = createAdapter({ refreshResourceCache: vi.fn(async () => { throw "cache failed"; }) });
+    renderSurface(unknown, { 0: [subscription], 5: subscription, 12: false });
+    await mocks.captures.settingsDialog.onRefreshResourceCache();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "资源缓存更新失败", variant: "destructive" }));
+  });
+
+  it("validates cache hours and reports an initial refresh warning", async () => {
+    const invalid = createAdapter();
+    renderSurface(invalid, {
+      0: [subscription], 4: true, 5: subscription, 6: "Cached", 7: true,
+      8: false, 9: 24, 10: true, 11: 0, 13: false,
+    });
+    await mocks.captures.settingsDialog.onSave();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "资源缓存更新间隔必须是不少于 1 的整数小时",
+      variant: "warning",
+    }));
+    expect(invalid.updateSubscriptionSettings).not.toHaveBeenCalled();
+
+    const firstRefreshFails = createAdapter({ refreshResourceCache: vi.fn(async () => { throw "offline"; }) });
+    renderSurface(firstRefreshFails, {
+      0: [subscription], 4: true, 5: subscription, 6: "Cached", 7: true,
+      8: false, 9: 24, 10: true, 11: 24, 13: false,
+    });
+    await mocks.captures.settingsDialog.onSave();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "设置已保存，但首次资源缓存更新失败",
+      description: "请稍后手动重试",
+      variant: "warning",
+    }));
+
+    const errorRefresh = createAdapter({ refreshResourceCache: vi.fn(async () => { throw new Error("initial cache failed"); }) });
+    renderSurface(errorRefresh, {
+      0: [subscription], 4: true, 5: subscription, 6: "Cached", 7: true,
+      8: false, 9: 24, 10: true, 11: 24, 13: false,
+    });
+    await mocks.captures.settingsDialog.onSave();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ description: "initial cache failed" }));
+
+    const alreadyCached = {
+      ...subscription,
+      autoUpdateInterval: Number.NaN,
+      resourceCacheEnabled: true,
+      resourceCacheInterval: 3600,
+      resourceCache: { ...subscription.resourceCache, status: "ready" },
+    };
+    const noRefresh = createAdapter();
+    renderSurface(noRefresh, {
+      0: [alreadyCached], 4: true, 5: alreadyCached, 6: "Cached", 7: true,
+      8: false, 9: 24, 10: true, 11: 1, 13: false,
+    });
+    await mocks.captures.settingsDialog.onSave();
+    expect(noRefresh.refreshResourceCache).not.toHaveBeenCalled();
+
+    renderSurface(noRefresh, { 0: [alreadyCached], 1: false });
+    mocks.captures.buttons.find((props: any) => props.title === "订阅设置（改名 / 自动更新）").onClick();
+    expect(stateMock.setters[9]).toHaveBeenCalledWith(24);
+  });
 });

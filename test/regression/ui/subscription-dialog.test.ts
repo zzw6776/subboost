@@ -78,6 +78,10 @@ const baseProps = {
     stepHours: 1,
     requireIntegerHours: true,
   },
+  resourceCacheEnabled: false,
+  setResourceCacheEnabled: vi.fn(),
+  resourceCacheHours: 24,
+  setResourceCacheHours: vi.fn(),
   smartNodeMatchingEnabled: true,
   setSmartNodeMatchingEnabled: vi.fn(),
   isCreatingSubscription: false,
@@ -100,6 +104,7 @@ describe("public SubscriptionLinkDialog branch coverage", () => {
       React.createElement(SubscriptionLinkDialog, {
         ...baseProps,
         autoUpdateEnabled: false,
+        resourceCacheEnabled: true,
         isCreatingSubscription: true,
       })
     );
@@ -107,9 +112,10 @@ describe("public SubscriptionLinkDialog branch coverage", () => {
     expect(html).toContain("生成订阅链接");
     expect(html).toContain("生成持久化的订阅链接");
     expect(html).toContain("您可以随时在仪表盘删除订阅");
+    expect(html).toContain("资源缓存更新间隔");
     expect(html).toContain("loading-icon");
-    expect(captures.inputs).toHaveLength(1);
-    expect(captures.switches).toHaveLength(2);
+    expect(captures.inputs).toHaveLength(2);
+    expect(captures.switches).toHaveLength(3);
   });
 
   it("renders edit mode before and after a subscription URL exists", () => {

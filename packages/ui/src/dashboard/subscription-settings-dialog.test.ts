@@ -214,4 +214,86 @@ describe("SubscriptionSettingsDialog", () => {
     expect(html).toContain("请减少导入节点或订阅源，或提高节点额度");
     expect(html).not.toContain("检查订阅 URL");
   });
+
+  it("renders cache status variants, entry sizes, stale errors, and refresh state", () => {
+    const entries = [
+      { key: "1", name: "bytes", status: "ready", sizeBytes: 12, lastUpdatedAt: null },
+      { key: "2", name: "kib", status: "stale", sizeBytes: 2048, lastUpdatedAt: "2026-01-01T00:00:00.000Z", lastError: "旧缓存" },
+      { key: "3", name: "mib", status: "failed", sizeBytes: 2 * 1024 * 1024, lastUpdatedAt: null },
+      { key: "4", name: "unknown", status: "custom", sizeBytes: null, lastUpdatedAt: null },
+    ].map((entry) => ({
+      kind: "rule-provider",
+      sourceUrl: `https://example.com/${entry.key}`,
+      contentType: null,
+      lastAttemptedAt: null,
+      lastError: null,
+      ...entry,
+    }));
+    const html = renderToStaticMarkup(React.createElement(SubscriptionSettingsDialog, {
+      ...baseProps,
+      resourceCacheEnabled: true,
+      refreshingResourceCache: true,
+      subscription: {
+        ...baseProps.subscription,
+        resourceCacheEnabled: true,
+        resourceCache: {
+          status: "partial",
+          lastAttemptedAt: null,
+          lastUpdatedAt: "2026-01-01T00:00:00.000Z",
+          nextUpdateAt: "2026-01-02T00:00:00.000Z",
+          lastError: "一个资源失败",
+          entries,
+        },
+      },
+    }));
+
+    expect(html).toContain("部分失败");
+    expect(html).toContain("更新中...");
+    expect(html).toContain("12 B");
+    expect(html).toContain("2.0 KiB");
+    expect(html).toContain("2.0 MiB");
+    expect(html).toContain("未知大小");
+    expect(html).toContain("使用旧缓存");
+    expect(html).toContain("custom");
+    expect(html).toContain("旧缓存");
+    expect(captures.buttons[0]).toMatchObject({ disabled: true });
+    captures.inputs[1].onChange({ target: { value: "48" } });
+    expect(baseProps.setResourceCacheHours).toHaveBeenCalledWith(48);
+  });
+
+  it.each(["disabled", "pending", "updating", "ready", "failed", "empty"])(
+    "renders the %s resource cache status label",
+    (status) => {
+      const html = renderToStaticMarkup(React.createElement(SubscriptionSettingsDialog, {
+        ...baseProps,
+        resourceCacheEnabled: true,
+        subscription: {
+          ...baseProps.subscription,
+          resourceCacheEnabled: true,
+          resourceCache: { ...baseProps.subscription.resourceCache, status },
+        },
+      }));
+      expect(html).toContain({
+        disabled: "未启用",
+        pending: "等待首次更新",
+        updating: "更新中",
+        ready: "正常",
+        failed: "更新失败",
+        empty: "没有可缓存资源",
+      }[status]);
+      captures.buttons[0].onClick();
+      expect(baseProps.onRefreshResourceCache).toHaveBeenCalled();
+    }
+  );
+
+  it("renders safely without a selected subscription", () => {
+    const html = renderToStaticMarkup(React.createElement(SubscriptionSettingsDialog, {
+      ...baseProps,
+      subscription: null,
+      resourceCacheEnabled: true,
+      autoUpdateEnabled: true,
+    }));
+    expect(html).toContain("资源缓存更新间隔");
+    expect(html).not.toContain("缓存条目");
+  });
 });

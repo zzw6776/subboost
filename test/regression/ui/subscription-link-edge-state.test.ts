@@ -205,6 +205,8 @@ describe("subscription link edge state", () => {
       token: "token-1",
       name: "Existing",
       autoUpdateInterval: null,
+      resourceCacheEnabled: false,
+      resourceCacheInterval: null,
       smartNodeMatchingEnabled: true,
     };
     let hook = useHookHarness({ editingSubscription });
@@ -212,13 +214,13 @@ describe("subscription link edge state", () => {
     hook = useHookHarness({ editingSubscription });
 
     await hook.handleCopyUrl();
-    expect(mocks.bag.state[7]).toBe(true);
+    expect(mocks.bag.state[9]).toBe(true);
     await vi.runAllTimersAsync();
 
     expect(mocks.bag.interactions.subscriptionLinkCopied).toHaveBeenCalledWith({
       flow: "update",
       mode: "quick",
     });
-    expect(mocks.bag.state[7]).toBe(false);
+    expect(mocks.bag.state[9]).toBe(false);
   });
 });

@@ -564,6 +564,79 @@ describe("local subscription service", () => {
     expect(mocks.removeSubscriptionResourceCache).toHaveBeenCalledWith("sub-1");
   });
 
+  it("creates and formats an enabled resource cache", async () => {
+    mocks.prisma.subscription.create.mockResolvedValueOnce(row({
+      name: "Cached",
+      resourceCacheEnabled: true,
+      resourceCacheInterval: 7200,
+      resourceCacheStatus: "ready",
+      resourceCacheLastAttemptedAt: new Date("2026-06-01T01:00:00.000Z"),
+      resourceCacheLastUpdatedAt: new Date("2026-06-01T01:30:00.000Z"),
+    }));
+    const created = await createSubscription("owner-1", {
+      name: "Cached",
+      urls: ["https://example.com/sub"],
+      resourceCacheEnabled: true,
+      resourceCacheInterval: 7200,
+    });
+    expect(mocks.prisma.subscription.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        resourceCacheEnabled: true,
+        resourceCacheInterval: 7200,
+        resourceCacheStatus: "pending",
+      }),
+    }));
+    expect(created.resourceCache).toMatchObject({
+      status: "ready",
+      lastAttemptedAt: "2026-06-01T01:00:00.000Z",
+      lastUpdatedAt: "2026-06-01T01:30:00.000Z",
+      nextUpdateAt: "2026-06-01T03:00:00.000Z",
+    });
+
+    await createSubscription("owner-1", {
+      name: "Default cache interval",
+      urls: ["https://example.com/sub"],
+      resourceCacheEnabled: true,
+    });
+    expect(mocks.prisma.subscription.create).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ resourceCacheInterval: 86400 }),
+    }));
+  });
+
+  it("validates cache settings and applies defaults while updating", async () => {
+    mocks.prisma.subscription.findFirst.mockResolvedValueOnce(row({ resourceCacheEnabled: undefined as any }));
+    await expect(updateSubscription("owner-1", "sub-1", {})).rejects.toThrow("resourceCacheEnabled must be a boolean");
+
+    await expect(updateSubscription("owner-1", "sub-1", { resourceCacheEnabled: "yes" }))
+      .rejects.toThrow("resourceCacheEnabled must be a boolean");
+
+    mocks.prisma.subscription.findFirst.mockResolvedValueOnce(row({ resourceCacheInterval: null }));
+    await updateSubscription("owner-1", "sub-1", { resourceCacheEnabled: true });
+    expect(mocks.prisma.subscription.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ resourceCacheInterval: 86400, resourceCacheStatus: "pending" }),
+    }));
+
+    mocks.prisma.subscription.findFirst.mockResolvedValueOnce(row({ resourceCacheEnabled: true }));
+    await expect(updateSubscription("owner-1", "sub-1", { resourceCacheInterval: null }))
+      .rejects.toThrow("启用服务器资源缓存时必须设置更新间隔");
+
+    await updateSubscription("owner-1", "sub-1", { resourceCacheInterval: 7200 });
+    expect(mocks.prisma.subscription.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ resourceCacheInterval: null }),
+    }));
+
+    await updateSubscription("owner-1", "sub-1", { subscriptionInfo: null });
+    expect(mocks.prisma.subscription.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ encryptedSubscriptionInfo: JSON.stringify({}) }),
+    }));
+
+    mocks.prisma.subscription.findFirst.mockResolvedValueOnce(row({ resourceCacheEnabled: true }));
+    await updateSubscription("owner-1", "sub-1", { config: { mixedPort: 7890 } });
+    expect(mocks.prisma.subscription.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ resourceCacheStatus: "pending" }),
+    }));
+  });
+
   it("replaces submitted config instead of retaining omitted stale fields", async () => {
     mocks.prisma.subscription.findFirst.mockResolvedValueOnce(
       row({
