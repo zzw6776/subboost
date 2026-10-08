@@ -304,9 +304,15 @@ describe("ProxyGroupsCustomRules", () => {
     ["IP-CIDR", "ipcidr"],
     ["IP-CIDR6", "ipcidr"],
     ["GEOIP", "geo"],
+    ["GEOSITE", "geo"],
     ["PROCESS-NAME", "process"],
     ["PROCESS-NAME-REGEX", "process"],
+    ["PROCESS-PATH", "process"],
+    ["PROCESS-PATH-REGEX", "process"],
     ["DST-PORT", "port"],
+    ["SRC-PORT", "port"],
+    ["AND", "unknown"],
+    ["RAW", "unknown"],
   ] as const)(
     "adds a %s rule and records the product interaction kind",
     (type, kind) => {
@@ -564,5 +570,76 @@ describe("ProxyGroupsCustomRules", () => {
 
     expect(html.match(/>目标分流组不可用</g)).toHaveLength(2);
     expect(html).not.toContain('title=""');
+  });
+
+  it("renders placeholders and resolves targets with stripped emoji prefixes", () => {
+    mocks.store.customProxyGroups = [
+      { id: "custom-claude", name: "🍥 claude", rules: [] },
+    ];
+    mocks.store.proxyGroupNameOverrides = { auto: "🚀 节点选择" };
+
+    const rawRender = renderRules({ 0: "RAW", 1: "AND,((DST-PORT,443)),REJECT", 2: "claude" });
+    expect(rawRender.html).toContain("完整规则 (如: AND,((DST-PORT,443),(NETWORK,udp)),REJECT)");
+
+    mocks.captures.buttons
+      .find((props) => props.children === "添加规则")
+      .onClick();
+    expect(mocks.store.addCustomRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "custom", id: "custom-claude" },
+      }),
+    );
+
+    const andRender = renderRules({ 0: "AND", 1: "((DST-PORT,80))", 2: "节点选择" });
+    expect(andRender.html).toContain("条件 (如: ((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))))");
+
+    mocks.captures.buttons
+      .find((props) => props.children === "添加规则")
+      .onClick();
+    expect(mocks.store.addCustomRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "module", id: "auto" },
+      }),
+    );
+
+    const orRender = renderRules({ 0: "OR" });
+    expect(orRender.html).toContain("条件 (如: ((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))))");
+
+    const notRender = renderRules({ 0: "NOT" });
+    expect(notRender.html).toContain("条件 (如: ((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))))");
+
+    const subRender = renderRules({ 0: "SUB-RULE" });
+    expect(subRender.html).toContain("条件 (如: ((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))))");
+  });
+
+  it("handles start editing and removing existing rules from row buttons", () => {
+    mocks.store.customRules = [
+      {
+        id: "rule-1",
+        type: "DOMAIN",
+        value: "row.com",
+        target: "DIRECT",
+        noResolve: false,
+      },
+    ];
+
+    const { setters } = renderRules();
+
+    const editBtn = mocks.captures.buttons.find(
+      (props) => props["aria-label"] === "编辑规则",
+    );
+    expect(editBtn).toBeDefined();
+    editBtn.onClick();
+    expect(setters[5]).toHaveBeenCalledWith("rule-1");
+    expect(setters[6]).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "rule-1", value: "row.com" }),
+    );
+
+    const removeBtn = mocks.captures.buttons.find(
+      (props) => props["aria-label"] === "删除规则",
+    );
+    expect(removeBtn).toBeDefined();
+    removeBtn.onClick();
+    expect(mocks.store.removeCustomRule).toHaveBeenCalledWith(0);
   });
 });

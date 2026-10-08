@@ -388,4 +388,28 @@ describe("custom rule batch import", () => {
     expect(result.errorCount).toBe(1);
     expect(result.items[0].message).toBe("括号未闭合");
   });
+
+  it("covers RAW edge cases and target map branches", () => {
+    const emptyRaw = parseCustomRuleBatchImport({
+      text: "RAW,",
+      defaultType: "DOMAIN",
+      defaultTarget: "",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT", " ", "🍥 claude", "✨ claude"],
+      existingRules: [],
+    });
+    expect(emptyRaw.items[0].message).toBe("规则内容不能为空");
+
+    const emptyDefaultTarget = parseCustomRuleBatchImport({
+      text: "RAW,SOME-RULE\nSOME-RULE-2",
+      defaultType: "RAW",
+      defaultTarget: "",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT"],
+      existingRules: [],
+    });
+    expect(emptyDefaultTarget.canImport).toBe(true);
+    expect(emptyDefaultTarget.rules[0].target).toBe("DIRECT");
+    expect(emptyDefaultTarget.rules[1].target).toBe("DIRECT");
+  });
 });

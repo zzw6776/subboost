@@ -566,12 +566,19 @@ describe("rule generator", () => {
           value: "- IN-TYPE,INNER,DIRECT",
           target: "DIRECT",
         },
+        {
+          id: "raw-rule-object",
+          type: "RAW",
+          value: "IN-USER,admin,DIRECT",
+          target: { kind: "custom", id: "group-1" } as any,
+        },
       ],
       fallbackPolicyTarget: "DIRECT",
     });
 
     expect(rules).toContain("AND,((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))),REJECT");
     expect(rules).toContain("IN-TYPE,INNER,DIRECT");
+    expect(rules).toContain("IN-USER,admin,DIRECT");
     expect(rules.at(-1)).toBe("MATCH,DIRECT");
   });
 });
