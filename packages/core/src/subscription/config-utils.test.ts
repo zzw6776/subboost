@@ -38,6 +38,7 @@ describe("subscription config utils", () => {
         enabledRules: ["global"],
         customRules: [
           { type: "DOMAIN-SUFFIX", value: " example.com ", target: " DIRECT ", noResolve: true },
+          { type: "PROCESS-NAME-REGEX", value: " (?i)claude ", target: " DIRECT " },
           { type: "BAD", value: "bad", target: "DIRECT" },
         ],
         customProxyGroups: [
@@ -125,6 +126,11 @@ describe("subscription config utils", () => {
       value: "example.com",
       target: "DIRECT",
       noResolve: true,
+    });
+    expect(userConfig.customRules?.[1]).toMatchObject({
+      type: "PROCESS-NAME-REGEX",
+      value: "(?i)claude",
+      target: "DIRECT",
     });
     expect(options.customProxyGroups?.[0]).toMatchObject({
       id: "media",

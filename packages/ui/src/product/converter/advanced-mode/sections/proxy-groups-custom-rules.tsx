@@ -49,6 +49,7 @@ const CUSTOM_RULE_TYPE_LABELS: Record<CustomRule["type"], string> = {
   GEOIP: "GeoIP (GEOIP)",
   GEOSITE: "GeoSite (GEOSITE)",
   "PROCESS-NAME": "进程名 (PROCESS-NAME)",
+  "PROCESS-NAME-REGEX": "进程正则 (PROCESS-NAME-REGEX)",
   "DST-PORT": "目标端口 (DST-PORT)",
   "SRC-PORT": "源端口 (SRC-PORT)",
 };
@@ -62,6 +63,7 @@ const CUSTOM_RULE_TYPE_SHORT_LABELS: Record<CustomRule["type"], string> = {
   GEOIP: "GeoIP",
   GEOSITE: "GeoSite",
   "PROCESS-NAME": "进程名",
+  "PROCESS-NAME-REGEX": "进程正则",
   "DST-PORT": "目标端口",
   "SRC-PORT": "源端口",
 };
@@ -75,7 +77,7 @@ function getProductRuleKind(type: CustomRule["type"]): ProductRuleKind {
   if (type.startsWith("DOMAIN")) return "domain";
   if (type.startsWith("IP-CIDR")) return "ipcidr";
   if (type === "GEOIP" || type === "GEOSITE") return "geo";
-  if (type === "PROCESS-NAME") return "process";
+  if (type === "PROCESS-NAME" || type === "PROCESS-NAME-REGEX") return "process";
   if (type === "DST-PORT" || type === "SRC-PORT") return "port";
   return "unknown";
 }

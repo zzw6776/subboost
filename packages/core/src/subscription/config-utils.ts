@@ -77,6 +77,7 @@ function normalizeCustomRules(value: unknown): CustomRule[] | undefined {
     "GEOIP",
     "GEOSITE",
     "PROCESS-NAME",
+    "PROCESS-NAME-REGEX",
     "DST-PORT",
     "SRC-PORT",
   ]);

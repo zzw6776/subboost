@@ -127,6 +127,7 @@ describe("custom rule id and order helpers", () => {
     );
     expect(ensureCustomRulesHaveIds("bad" as never)).toEqual([]);
     expect(isCustomRuleType("DOMAIN")).toBe(true);
+    expect(isCustomRuleType("PROCESS-NAME-REGEX")).toBe(true);
     expect(isCustomRuleType("BAD")).toBe(false);
 
     const customRules = [ruleWithoutId];
@@ -280,5 +281,23 @@ describe("custom rule batch import", () => {
         noResolve: true,
       }),
     ]);
+  });
+
+  it("supports batch importing PROCESS-NAME-REGEX rules", () => {
+    const result = parseCustomRuleBatchImport({
+      text: "PROCESS-NAME-REGEX,(?i)claude,DIRECT",
+      defaultType: "DOMAIN",
+      defaultTarget: "PROXY",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT", "PROXY"],
+      existingRules: [],
+    });
+
+    expect(result.readyCount).toBe(1);
+    expect(result.rules[0]).toMatchObject({
+      type: "PROCESS-NAME-REGEX",
+      value: "(?i)claude",
+      target: "DIRECT",
+    });
   });
 });

@@ -9,6 +9,7 @@ export const CUSTOM_RULE_TYPES = [
   "GEOIP",
   "GEOSITE",
   "PROCESS-NAME",
+  "PROCESS-NAME-REGEX",
   "DST-PORT",
   "SRC-PORT",
 ] as const satisfies readonly CustomRule["type"][];

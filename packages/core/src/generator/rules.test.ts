@@ -455,6 +455,13 @@ describe("rule generator", () => {
           target: "DIRECT",
           noResolve: true,
         },
+        {
+          id: "process-regex",
+          type: "PROCESS-NAME-REGEX",
+          value: "(?i)claude",
+          target: "DIRECT",
+          noResolve: true,
+        },
       ],
       customRuleSets: [
         {
@@ -527,6 +534,8 @@ describe("rule generator", () => {
     expect(texts).toContain("IP-CIDR6,2001:db8::/32,DIRECT,no-resolve");
     expect(texts).toContain("PROCESS-NAME,curl,DIRECT");
     expect(texts).not.toContain("PROCESS-NAME,curl,DIRECT,no-resolve");
+    expect(texts).toContain("PROCESS-NAME-REGEX,(?i)claude,DIRECT");
+    expect(texts).not.toContain("PROCESS-NAME-REGEX,(?i)claude,DIRECT,no-resolve");
     expect(texts).toContain("RULE-SET,fallback-set,DIRECT");
     expect(texts).toContain("RULE-SET,custom-set,Regional,no-resolve");
     expect(texts).not.toContain("RULE-SET,cn-ip,🔒 国内服务,no-resolve");

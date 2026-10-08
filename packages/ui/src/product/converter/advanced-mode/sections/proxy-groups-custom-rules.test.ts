@@ -126,6 +126,7 @@ vi.mock("@subboost/core/rules/custom-rule-utils", () => ({
     "GEOIP",
     "GEOSITE",
     "PROCESS-NAME",
+    "PROCESS-NAME-REGEX",
     "DST-PORT",
     "SRC-PORT",
   ],
@@ -309,6 +310,7 @@ describe("ProxyGroupsCustomRules", () => {
     ["IP-CIDR6", "ipcidr"],
     ["GEOIP", "geo"],
     ["PROCESS-NAME", "process"],
+    ["PROCESS-NAME-REGEX", "process"],
     ["DST-PORT", "port"],
   ] as const)(
     "adds a %s rule and records the product interaction kind",
