@@ -10,8 +10,16 @@ export const CUSTOM_RULE_TYPES = [
   "GEOSITE",
   "PROCESS-NAME",
   "PROCESS-NAME-REGEX",
+  "PROCESS-PATH",
+  "PROCESS-PATH-REGEX",
+  "NETWORK",
   "DST-PORT",
   "SRC-PORT",
+  "AND",
+  "OR",
+  "NOT",
+  "SUB-RULE",
+  "RAW",
 ] as const satisfies readonly CustomRule["type"][];
 
 const customRuleTypeSet = new Set<string>(CUSTOM_RULE_TYPES);

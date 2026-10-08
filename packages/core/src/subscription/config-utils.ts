@@ -78,8 +78,16 @@ function normalizeCustomRules(value: unknown): CustomRule[] | undefined {
     "GEOSITE",
     "PROCESS-NAME",
     "PROCESS-NAME-REGEX",
+    "PROCESS-PATH",
+    "PROCESS-PATH-REGEX",
+    "NETWORK",
     "DST-PORT",
     "SRC-PORT",
+    "AND",
+    "OR",
+    "NOT",
+    "SUB-RULE",
+    "RAW",
   ]);
 
   const out: CustomRule[] = [];

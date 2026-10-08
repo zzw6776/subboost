@@ -549,4 +549,29 @@ describe("rule generator", () => {
       "special:experimental-cn",
     ]);
   });
+
+  it("generates logical AND rules and verbatim RAW rules", () => {
+    const rules = generateRules({
+      enabledModules: [],
+      customRules: [
+        {
+          id: "and-rule",
+          type: "AND",
+          value: "((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN))))",
+          target: "REJECT",
+        },
+        {
+          id: "raw-rule",
+          type: "RAW",
+          value: "- IN-TYPE,INNER,DIRECT",
+          target: "DIRECT",
+        },
+      ],
+      fallbackPolicyTarget: "DIRECT",
+    });
+
+    expect(rules).toContain("AND,((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))),REJECT");
+    expect(rules).toContain("IN-TYPE,INNER,DIRECT");
+    expect(rules.at(-1)).toBe("MATCH,DIRECT");
+  });
 });

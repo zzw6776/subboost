@@ -211,7 +211,26 @@ export interface UserConfig {
 
 export interface CustomRule {
   id: string;
-  type: "DOMAIN" | "DOMAIN-SUFFIX" | "DOMAIN-KEYWORD" | "IP-CIDR" | "IP-CIDR6" | "GEOIP" | "GEOSITE" | "PROCESS-NAME" | "PROCESS-NAME-REGEX" | "DST-PORT" | "SRC-PORT";
+  type:
+    | "DOMAIN"
+    | "DOMAIN-SUFFIX"
+    | "DOMAIN-KEYWORD"
+    | "IP-CIDR"
+    | "IP-CIDR6"
+    | "GEOIP"
+    | "GEOSITE"
+    | "PROCESS-NAME"
+    | "PROCESS-NAME-REGEX"
+    | "PROCESS-PATH"
+    | "PROCESS-PATH-REGEX"
+    | "NETWORK"
+    | "DST-PORT"
+    | "SRC-PORT"
+    | "AND"
+    | "OR"
+    | "NOT"
+    | "SUB-RULE"
+    | "RAW";
   value: string;
   target: ProxyGroupRuleTarget;
   noResolve?: boolean;

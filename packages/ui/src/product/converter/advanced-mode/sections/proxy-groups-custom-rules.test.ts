@@ -110,28 +110,23 @@ vi.mock("@subboost/core/generator/proxy-groups", () => ({
     { id: "fallback", name: "Fallback" },
   ],
 }));
-vi.mock("@subboost/core/proxy-group-name", () => ({
-  resolveProxyGroupModuleName: (
-    module: { name: string; id: string },
-    override?: string,
-  ) => override || module.name,
-}));
-vi.mock("@subboost/core/rules/custom-rule-utils", () => ({
-  CUSTOM_RULE_TYPES: [
-    "DOMAIN",
-    "DOMAIN-SUFFIX",
-    "DOMAIN-KEYWORD",
-    "IP-CIDR",
-    "IP-CIDR6",
-    "GEOIP",
-    "GEOSITE",
-    "PROCESS-NAME",
-    "PROCESS-NAME-REGEX",
-    "DST-PORT",
-    "SRC-PORT",
-  ],
-  createCustomRuleId: mocks.createCustomRuleId,
-}));
+vi.mock("@subboost/core/proxy-group-name", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@subboost/core/proxy-group-name")>();
+  return {
+    ...actual,
+    resolveProxyGroupModuleName: (
+      module: { name: string; id: string },
+      override?: string,
+    ) => override || module.name,
+  };
+});
+vi.mock("@subboost/core/rules/custom-rule-utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@subboost/core/rules/custom-rule-utils")>();
+  return {
+    ...actual,
+    createCustomRuleId: mocks.createCustomRuleId,
+  };
+});
 vi.mock("@subboost/ui/store/config-store", () => ({
   useConfigStore: () => mocks.store,
 }));

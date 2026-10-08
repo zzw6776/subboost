@@ -179,6 +179,21 @@ function buildCustomRuleEntry(
   customProxyGroups: CustomProxyGroup[] = [],
   resolvePolicyTarget: (target: string) => string = (target) => target
 ): GeneratedRuleEntry {
+  if (rule.type === "RAW") {
+    const text = rule.value.trim().replace(/^-\s*/, "");
+    const target = typeof rule.target === "string" ? rule.target : "DIRECT";
+    return {
+      key: getCustomRuleOrderKey(rule.id),
+      text,
+      kind: "custom-rule",
+      sourceLabel: "自定义规则",
+      summary: text,
+      target,
+      noResolve: false,
+      editable: true,
+      enabled: true,
+    };
+  }
   const noResolve = Boolean(rule.noResolve) && (rule.type === "IP-CIDR" || rule.type === "IP-CIDR6");
   const target = resolvePolicyTarget(resolveProxyGroupTargetName(rule.target, { moduleNames, customProxyGroups }));
   let text = `${rule.type},${rule.value},${target}`;

@@ -14,7 +14,7 @@ import {
 } from "@subboost/ui/components/ui/select";
 import { Switch } from "@subboost/ui/components/ui/switch";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
-import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
+import { resolveProxyGroupModuleName, splitLeadingEmoji } from "@subboost/core/proxy-group-name";
 import { resolveProxyGroupTargetName } from "@subboost/core/proxy-group-targets";
 import {
   createCustomRuleId,
@@ -50,8 +50,16 @@ const CUSTOM_RULE_TYPE_LABELS: Record<CustomRule["type"], string> = {
   GEOSITE: "GeoSite (GEOSITE)",
   "PROCESS-NAME": "进程名 (PROCESS-NAME)",
   "PROCESS-NAME-REGEX": "进程正则 (PROCESS-NAME-REGEX)",
+  "PROCESS-PATH": "进程路径 (PROCESS-PATH)",
+  "PROCESS-PATH-REGEX": "进程路径正则 (PROCESS-PATH-REGEX)",
+  NETWORK: "网络协议 (NETWORK)",
   "DST-PORT": "目标端口 (DST-PORT)",
   "SRC-PORT": "源端口 (SRC-PORT)",
+  AND: "逻辑与 (AND)",
+  OR: "逻辑或 (OR)",
+  NOT: "逻辑非 (NOT)",
+  "SUB-RULE": "子规则 (SUB-RULE)",
+  RAW: "原始规则 (RAW)",
 };
 
 const CUSTOM_RULE_TYPE_SHORT_LABELS: Record<CustomRule["type"], string> = {
@@ -64,8 +72,16 @@ const CUSTOM_RULE_TYPE_SHORT_LABELS: Record<CustomRule["type"], string> = {
   GEOSITE: "GeoSite",
   "PROCESS-NAME": "进程名",
   "PROCESS-NAME-REGEX": "进程正则",
+  "PROCESS-PATH": "进程路径",
+  "PROCESS-PATH-REGEX": "进程路径正则",
+  NETWORK: "网络协议",
   "DST-PORT": "目标端口",
   "SRC-PORT": "源端口",
+  AND: "逻辑与",
+  OR: "逻辑或",
+  NOT: "逻辑非",
+  "SUB-RULE": "子规则",
+  RAW: "原始规则",
 };
 
 const CUSTOM_RULE_TYPE_OPTIONS = CUSTOM_RULE_TYPES.map((value) => ({
@@ -77,9 +93,17 @@ function getProductRuleKind(type: CustomRule["type"]): ProductRuleKind {
   if (type.startsWith("DOMAIN")) return "domain";
   if (type.startsWith("IP-CIDR")) return "ipcidr";
   if (type === "GEOIP" || type === "GEOSITE") return "geo";
-  if (type === "PROCESS-NAME" || type === "PROCESS-NAME-REGEX") return "process";
+  if (type.startsWith("PROCESS-")) return "process";
   if (type === "DST-PORT" || type === "SRC-PORT") return "port";
   return "unknown";
+}
+
+function getCustomRulePlaceholder(type: CustomRule["type"]): string {
+  if (type === "RAW") return "完整规则 (如: AND,((DST-PORT,443),(NETWORK,udp)),REJECT)";
+  if (type === "AND" || type === "OR" || type === "NOT" || type === "SUB-RULE") {
+    return "条件 (如: ((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))))";
+  }
+  return "值 (如: google.com)";
 }
 
 function isIpCidrRuleType(type: CustomRule["type"]): boolean {
@@ -100,8 +124,14 @@ function toStableRuleTarget(
   const normalized = targetName.trim();
   for (const [id, name] of Object.entries(moduleNames)) {
     if (name.trim() === normalized) return { kind: "module", id };
+    const parsed = splitLeadingEmoji(name);
+    if (parsed.hasEmojiPrefix && parsed.label.trim() === normalized) return { kind: "module", id };
   }
-  const customGroup = customProxyGroups.find((group) => group.name.trim() === normalized);
+  const customGroup = customProxyGroups.find((group) => {
+    if (group.name.trim() === normalized) return true;
+    const parsed = splitLeadingEmoji(group.name);
+    return parsed.hasEmojiPrefix && parsed.label.trim() === normalized;
+  });
   if (customGroup) return { kind: "custom", id: customGroup.id };
   return normalized;
 }
@@ -300,7 +330,7 @@ export function ProxyGroupsCustomRules() {
             <Input
               value={newRuleValue}
               onChange={(e) => setNewRuleValue(e.target.value)}
-              placeholder="值 (如: google.com)"
+              placeholder={getCustomRulePlaceholder(newRuleType)}
               className="h-7 min-w-0 flex-[1_1_4.5rem] text-xs"
             />
           </div>
@@ -403,6 +433,7 @@ export function ProxyGroupsCustomRules() {
                             prev ? { ...prev, value: e.target.value } : prev,
                           )
                         }
+                        placeholder={getCustomRulePlaceholder(editingRuleDraft.type)}
                         className="h-7 min-w-0 flex-[1_1_4.5rem] text-xs"
                       />
                     </div>

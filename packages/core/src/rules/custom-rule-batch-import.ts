@@ -1,4 +1,5 @@
 import type { CustomRule } from "@subboost/core/types/config";
+import { splitLeadingEmoji } from "../proxy-group-name";
 import { isCustomRuleType } from "./custom-rule-utils";
 
 export type CustomRuleBatchImportPreviewStatus =
@@ -42,6 +43,7 @@ function splitRuleLine(rawLine: string): SplitLineResult {
   const parts: string[] = [];
   let current = "";
   let quoted = false;
+  let parenDepth = 0;
 
   for (let index = 0; index < rawLine.length; index += 1) {
     const char = rawLine[index];
@@ -54,7 +56,11 @@ function splitRuleLine(rawLine: string): SplitLineResult {
       quoted = !quoted;
       continue;
     }
-    if (char === "," && !quoted) {
+    if (!quoted) {
+      if (char === "(") parenDepth += 1;
+      else if (char === ")") parenDepth = Math.max(0, parenDepth - 1);
+    }
+    if (char === "," && !quoted && parenDepth === 0) {
       parts.push(current.trim());
       current = "";
       continue;
@@ -64,6 +70,9 @@ function splitRuleLine(rawLine: string): SplitLineResult {
 
   if (quoted) {
     return { ok: false, error: "引号未闭合" };
+  }
+  if (parenDepth > 0) {
+    return { ok: false, error: "括号未闭合" };
   }
 
   parts.push(current.trim());
@@ -116,6 +125,26 @@ function buildRuleFromParts(
   const first = parts[0]?.trim() ?? "";
   if (!first) return "规则为空";
 
+  if (first.toUpperCase() === "RAW") {
+    const rawVal = parts.slice(1).join(",").trim();
+    if (!rawVal) return "规则内容不能为空";
+    return {
+      type: "RAW",
+      value: rawVal,
+      target: options.defaultTarget.trim() || "DIRECT",
+      noResolve: false,
+    };
+  }
+
+  if (options.defaultType === "RAW" && !isCustomRuleType(first)) {
+    return {
+      type: "RAW",
+      value: parts.join(",").trim(),
+      target: options.defaultTarget.trim() || "DIRECT",
+      noResolve: false,
+    };
+  }
+
   if (parts.length === 1) {
     return {
       type: options.defaultType,
@@ -157,11 +186,19 @@ function buildRuleFromParts(
 export function parseCustomRuleBatchImport(
   options: ParseCustomRuleBatchImportOptions,
 ): CustomRuleBatchImportResult {
-  const targetSet = new Set(
-    options.targetOptions
-      .map((target) => target.trim())
-      .filter(Boolean),
-  );
+  const targetMap = new Map<string, string>();
+  for (const option of options.targetOptions) {
+    const trimmed = option.trim();
+    if (!trimmed) continue;
+    targetMap.set(trimmed, trimmed);
+    const parsed = splitLeadingEmoji(trimmed);
+    if (parsed.hasEmojiPrefix && parsed.label.trim()) {
+      const stripped = parsed.label.trim();
+      if (!targetMap.has(stripped)) {
+        targetMap.set(stripped, trimmed);
+      }
+    }
+  }
   const existingKeys = new Set(options.existingRules.map((rule) => getRuleKey(rule)));
   const batchKeys = new Set<string>();
   const items: CustomRuleBatchImportPreviewItem[] = [];
@@ -267,7 +304,9 @@ export function parseCustomRuleBatchImport(
       return;
     }
 
-    if (!targetSet.has(target)) {
+    const resolvedTarget = draft.type === "RAW" ? target : targetMap.get(target);
+
+    if (draft.type !== "RAW" && !resolvedTarget) {
       errorCount += 1;
       items.push({
         lineNumber,
@@ -282,7 +321,7 @@ export function parseCustomRuleBatchImport(
       id: "",
       type: draft.type,
       value: draft.value.trim(),
-      target,
+      target: resolvedTarget ?? target,
       noResolve: Boolean(draft.noResolve),
     };
     const key = getRuleKey(rule);

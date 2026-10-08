@@ -163,6 +163,8 @@ export function ProxyGroupsCustomRulesBatchDialog({
               value={rawText}
               onChange={(event) => setRawText(event.target.value)}
               placeholder={[
+                "AND,((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))),REJECT",
+                "PROCESS-NAME-REGEX,(?i)claude,🚀 节点选择",
                 "DOMAIN-SUFFIX,example.com,🚀 节点选择",
                 "IP-CIDR,1.1.1.0/24,DIRECT,no-resolve",
                 "GEOSITE,google",

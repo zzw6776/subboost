@@ -128,6 +128,11 @@ describe("custom rule id and order helpers", () => {
     expect(ensureCustomRulesHaveIds("bad" as never)).toEqual([]);
     expect(isCustomRuleType("DOMAIN")).toBe(true);
     expect(isCustomRuleType("PROCESS-NAME-REGEX")).toBe(true);
+    expect(isCustomRuleType("AND")).toBe(true);
+    expect(isCustomRuleType("OR")).toBe(true);
+    expect(isCustomRuleType("NOT")).toBe(true);
+    expect(isCustomRuleType("SUB-RULE")).toBe(true);
+    expect(isCustomRuleType("RAW")).toBe(true);
     expect(isCustomRuleType("BAD")).toBe(false);
 
     const customRules = [ruleWithoutId];
@@ -299,5 +304,88 @@ describe("custom rule batch import", () => {
       value: "(?i)claude",
       target: "DIRECT",
     });
+  });
+
+  it("supports batch importing Mihomo logical rules with nested parentheses", () => {
+    const result = parseCustomRuleBatchImport({
+      text: "- AND,((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN)))),REJECT",
+      defaultType: "DOMAIN",
+      defaultTarget: "DIRECT",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT", "REJECT"],
+      existingRules: [],
+    });
+
+    expect(result.canImport).toBe(true);
+    expect(result.readyCount).toBe(1);
+    expect(result.rules[0]).toMatchObject({
+      type: "AND",
+      value: "((DST-PORT,443),(NETWORK,udp),(NOT,((GEOIP,CN))))",
+      target: "REJECT",
+    });
+  });
+
+  it("resolves target options matching stripped emoji prefix", () => {
+    const result = parseCustomRuleBatchImport({
+      text: [
+        "PROCESS-NAME-REGEX,(?i)claude,claude",
+        "DOMAIN-KEYWORD,anthropic,claude",
+        "DOMAIN-SUFFIX,claude.ai,claude",
+      ].join("\n"),
+      defaultType: "DOMAIN",
+      defaultTarget: "DIRECT",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT", "REJECT", "🍥 claude"],
+      existingRules: [],
+    });
+
+    expect(result.canImport).toBe(true);
+    expect(result.readyCount).toBe(3);
+    expect(result.rules.every((r) => r.target === "🍥 claude")).toBe(true);
+  });
+
+  it("supports RAW rules with RAW prefix or defaultType RAW", () => {
+    const rawPrefixed = parseCustomRuleBatchImport({
+      text: "RAW,IN-TYPE,INNER,DIRECT",
+      defaultType: "DOMAIN",
+      defaultTarget: "DIRECT",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT"],
+      existingRules: [],
+    });
+    expect(rawPrefixed.canImport).toBe(true);
+    expect(rawPrefixed.rules[0]).toMatchObject({
+      type: "RAW",
+      value: "IN-TYPE,INNER,DIRECT",
+    });
+
+    const rawDefault = parseCustomRuleBatchImport({
+      text: "IN-TYPE,INNER,DIRECT",
+      defaultType: "RAW",
+      defaultTarget: "DIRECT",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT"],
+      existingRules: [],
+    });
+    expect(rawDefault.canImport).toBe(true);
+    expect(rawDefault.rules[0]).toMatchObject({
+      type: "RAW",
+      value: "IN-TYPE,INNER,DIRECT",
+    });
+  });
+
+  it("catches unclosed parentheses in batch import", () => {
+    const result = parseCustomRuleBatchImport({
+      text: "AND,((DST-PORT,443),(NETWORK,udp),REJECT",
+      defaultType: "DOMAIN",
+      defaultTarget: "DIRECT",
+      defaultNoResolve: false,
+      targetOptions: ["DIRECT", "REJECT"],
+      existingRules: [],
+    });
+
+    expect(result.canImport).toBe(false);
+    expect(result.errorCount).toBe(1);
+    expect(result.items[0].message).toBe("括号未闭合");
   });
 });
